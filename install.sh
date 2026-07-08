@@ -50,22 +50,43 @@ else
 fi
 cd "$DIR"
 
-# ── 3. toolchains (aios finds these even if not yet on PATH) ──────────────────
+# ── 3. toolchains ────────────────────────────────────────────────────────────
+# WSL note: the inherited Windows PATH exposes Windows node/pnpm (under /mnt/c)
+# to Linux. Those are the wrong binaries — we require a NATIVE Linux Node >=20
+# and pnpm, and ignore anything resolving under /mnt/*.
 c "Installing toolchains…"
-have uv   || { c "· uv";   curl -LsSf https://astral.sh/uv/install.sh | sh; }
-have bun  || { c "· bun";  curl -fsSL https://bun.sh/install | bash; }
-have pnpm || { c "· pnpm"; curl -fsSL https://get.pnpm.io/install.sh | SHELL="$(command -v bash)" sh -; }
-if ! have node; then
-  c "· node (via nvm)"
+have uv  || { c "· uv";  curl -LsSf https://astral.sh/uv/install.sh | sh; }
+have bun || { c "· bun"; curl -fsSL https://bun.sh/install | bash; }
+
+# Node >= 20 (Ubuntu/WSL default is often 18; openclaw + Next.js need >=20).
+node_major=0
+if have node; then
+  case "$(command -v node)" in
+    /mnt/*) node_major=0 ;;  # Windows node leaked into WSL → treat as absent
+    *) node_major="$(node -v 2>/dev/null | sed 's/^v//; s/\..*//' | grep -E '^[0-9]+$' || echo 0)" ;;
+  esac
+fi
+if [ "${node_major:-0}" -lt 20 ]; then
+  c "· node >=20 (via nvm; found major '${node_major}')"
   export NVM_DIR="$HOME/.nvm"
-  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+  [ -s "$NVM_DIR/nvm.sh" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
   # shellcheck disable=SC1090
-  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm install --lts >/dev/null 2>&1 || true
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm install 22 >/dev/null 2>&1 && nvm use 22 >/dev/null 2>&1 || true
+fi
+# shellcheck disable=SC1090
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm use 22 >/dev/null 2>&1 || true
+
+# pnpm — must be native (a /mnt/* pnpm runs the wrong Node).
+native_pnpm(){ p="$(command -v pnpm 2>/dev/null || true)"; [ -n "$p" ] && case "$p" in /mnt/*) return 1 ;; *) return 0 ;; esac; return 1; }
+if ! native_pnpm; then
+  c "· pnpm (native Linux)"
+  have npm && npm install -g pnpm >/dev/null 2>&1 || true
+  native_pnpm || curl -fsSL https://get.pnpm.io/install.sh | SHELL="$(command -v bash)" sh -
 fi
 
 # make freshly-installed tools visible to this shell (and to aios subprocesses)
-export PATH="$HOME/.bun/bin:$HOME/.local/bin:$HOME/.local/share/pnpm:$PATH"
-[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null || true
+export PATH="$HOME/.local/share/pnpm:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm use 22 >/dev/null 2>&1 || true
 
 # ── 4. run aios setup (deps + build + wire) ──────────────────────────────────
 if [ "${AIOS_NO_SETUP:-0}" = "1" ]; then

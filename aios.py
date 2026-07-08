@@ -270,14 +270,21 @@ PROJECTS = {
 # --------------------------------------------------------------------------- #
 def find_tool(name: str) -> str | None:
     p = shutil.which(name)
-    if p:
+    # On WSL the inherited Windows PATH leaks /mnt/c Windows binaries (Nodist
+    # node/pnpm) that run the wrong runtime — ignore those and prefer native ones.
+    if p and (IS_WIN or not p.replace("\\", "/").startswith("/mnt/")):
         return p
     home = Path.home()
+    # Newest nvm-installed node bin dirs (for native node/npm/pnpm on Linux).
+    nvm = home / ".nvm" / "versions" / "node"
+    nvm_bins = sorted(nvm.glob("*/bin"), reverse=True) if nvm.exists() else []
     extra = {
         "bun": [home / ".bun/bin/bun.exe", home / ".bun/bin/bun"],
         "uv": [home / ".local/bin/uv.exe", home / ".local/bin/uv", home / ".cargo/bin/uv"],
         "pnpm": [home / "AppData/Roaming/npm/pnpm.cmd", home / ".local/share/pnpm/pnpm.exe",
-                 home / ".local/share/pnpm/pnpm"],
+                 home / ".local/share/pnpm/pnpm"] + [b / "pnpm" for b in nvm_bins],
+        "node": [b / "node" for b in nvm_bins],
+        "npm": [b / "npm" for b in nvm_bins],
     }
     for cand in extra.get(name, []):
         if Path(cand).exists():
@@ -583,7 +590,7 @@ def cmd_doctor(args):
                 "bun": 'powershell -c "irm bun.sh/install.ps1 | iex"',
                 "pnpm": "npm i -g pnpm",
                 "uv": 'powershell -c "irm https://astral.sh/uv/install.ps1 | iex"',
-                "node": "install Node >=20 from https://nodejs.org",
+                "node": "nvm install 22  (WSL/Linux — native Node >=20) or https://nodejs.org",
                 "git": "install Git from https://git-scm.com",
             }[t]
             err(f"{t:5} MISSING  ({why})  → fix: {C.B}{fix}{C.R}")
