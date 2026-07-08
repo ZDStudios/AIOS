@@ -92,6 +92,7 @@ cd ~/AIOS
 | **hermes** | Autonomous agent — memory, cron, learning loop, dashboard | `9119` | [Nous Research](https://github.com/NousResearch/hermes-agent) |
 | **openclaw** | Multi-channel messaging gateway + plugin host | `18789` | [openclaw.ai](https://github.com/openclaw/openclaw) |
 | **CrewAI** | Multi-agent orchestration — role-based crews | `4788` | [crewaiinc/crewai](https://github.com/crewaiinc/crewai) |
+| **claude-code** | Claude Code as an OpenAI-compatible API | `8000` | [codingworkflow/claude-code-api](https://github.com/codingworkflow/claude-code-api) |
 | **LifeOS** | Shared identity + skills mounted into the agents | — | [danielmiessler/LifeOS](https://github.com/danielmiessler/LifeOS) |
 
 Plus two integrations that glue it together:
@@ -155,9 +156,12 @@ Plus two integrations that glue it together:
 | `aios logs [svc]` | Tail a service log from `.aios/logs/`. |
 | `aios url` | Print the Control Room + service URLs. |
 
-**In the Control Room** (`http://127.0.0.1:8787/`) you can chat with any agent, click into each agent's
-panel, and open **Settings** to edit your provider/key/model, channel tokens, and `aios.config.yaml` — it
-writes `.env`/config and re-renders into every agent, no terminal needed.
+**In the Control Room** (`http://127.0.0.1:8787/`) you can:
+- **Chat** with any agent (Brain, CrewAI, opencode, claude-code) or broadcast to **All**; agents reach each other via the hub.
+- **Open openclaw's full control plane inside the hub** — channels, **connectors**, model providers, **MCP servers**, skills, plugins, **automations/cron**, and sessions — embedded via a frame-stripping proxy (openclaw normally blocks embedding).
+- **Automations** — schedule prompts to run against any agent every N minutes (daily digests, checks).
+- **Settings** — edit provider/key/model, channel tokens, and `aios.config.yaml`; it re-renders into every agent, no terminal needed.
+- **Themes** — Light, Dark, Midnight, Slate, Rose.
 
 ## ⚙️ Configuration
 

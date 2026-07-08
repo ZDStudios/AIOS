@@ -18,6 +18,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import time
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -85,8 +86,12 @@ PEERS = {
     "hermes": os.environ.get("AIOS_HERMES_URL", "http://127.0.0.1:9119"),
     "openclaw": os.environ.get("AIOS_OPENCLAW_URL", "http://127.0.0.1:18789"),
     "crewai": os.environ.get("AIOS_CREWAI_URL", "http://127.0.0.1:4788"),
+    "claudecode": os.environ.get("AIOS_CLAUDECODE_URL", "http://127.0.0.1:8000"),
     "openclaw-os": os.environ.get("AIOS_OPENCLAWOS_URL", "http://127.0.0.1:18789/plugins/openclawos/"),
 }
+CLAUDECODE = os.environ.get("AIOS_CLAUDECODE_URL", "http://127.0.0.1:8000").rstrip("/")
+OPENCLAW_EMBED = os.environ.get("AIOS_OPENCLAWPROXY_URL", "http://127.0.0.1:8791/")
+SCHEDULES_FILE = ROOT / ".aios" / "schedules.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -161,26 +166,80 @@ def ask_opencode(message: str) -> str:
         return f"⚠️ opencode error: {e}"
 
 
+def ask_claudecode(message: str, history: list | None = None) -> str:
+    """Call claude-code-api's OpenAI-compatible endpoint."""
+    msgs = (history or []) + [{"role": "user", "content": message}]
+    body = json.dumps({"model": "claude-sonnet-4-5", "messages": msgs}).encode()
+    req = urllib.request.Request(CLAUDECODE + "/v1/chat/completions", data=body, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            return json.loads(r.read())["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"⚠️ claude-code-api not reachable ({e}). Start it (`aios start claudecode`) and make sure the `claude` CLI is installed + authenticated."
+
+
 def route(target: str, message: str, history: list | None = None) -> str:
     history = history or []
     target = (target or "brain").lower()
     if target in ("brain", "aios", "hub"):
-        sys = ("You are the AIOS Brain — the orchestrator of The AI OS, which unifies five agents: "
+        sys = ("You are the AIOS Brain — the orchestrator of The AI OS, which unifies six agents: "
                "opencode (coding), hermes (autonomous), openclaw (channels), CrewAI (multi-agent crews), "
-               "and LifeOS (shared skills). Be concise and helpful. You can suggest which agent is best "
-               "for a task. When a visual answer helps (charts, tables, forms, dashboards), you may emit "
-               "OpenUI Lang (https://www.openui.com) which the openclaw-os dashboard renders as a live app.")
+               "claude-code (Claude Code API), and LifeOS (shared skills). Be concise and helpful. Suggest "
+               "which agent is best for a task. When a visual answer helps (charts, tables, forms, dashboards), "
+               "you may emit OpenUI Lang (https://www.openui.com) which the openclaw-os dashboard renders live.")
         return llm_chat(history + [{"role": "user", "content": message}], system=sys)
     if target == "crewai":
         return ask_crewai(message)
     if target == "opencode":
         return ask_opencode(message)
+    if target in ("claudecode", "claude-code"):
+        return ask_claudecode(message, history)
     if target == "all":
         parts = []
-        for t in ("brain", "crewai", "opencode"):
+        for t in ("brain", "crewai", "opencode", "claudecode"):
             parts.append(f"### {t}\n{route(t, message, history)}")
         return "\n\n".join(parts)
-    return f"⚠️ Unknown target '{target}'. Use brain | crewai | opencode | all."
+    return f"⚠️ Unknown target '{target}'. Use brain | crewai | opencode | claudecode | all."
+
+
+# --------------------------------------------------------------------------- #
+# Automations — schedule prompts to run against an agent on an interval        #
+# --------------------------------------------------------------------------- #
+def load_schedules() -> list:
+    if SCHEDULES_FILE.exists():
+        try:
+            return json.loads(SCHEDULES_FILE.read_text())
+        except Exception:
+            return []
+    return []
+
+
+def save_schedules(items: list):
+    SCHEDULES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SCHEDULES_FILE.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
+
+def _scheduler_loop():
+    import time as _t
+    while True:
+        try:
+            now = _t.time()
+            items = load_schedules()
+            changed = False
+            for it in items:
+                if not it.get("enabled", True):
+                    continue
+                every = int(it.get("every_minutes", 60)) * 60
+                if now - it.get("last_run", 0) >= every:
+                    it["last_run"] = now
+                    it["last_reply"] = route(it.get("target", "brain"), it.get("prompt", ""))[:2000]
+                    changed = True
+            if changed:
+                save_schedules(items)
+        except Exception:
+            pass
+        _t.sleep(30)
 
 
 # --------------------------------------------------------------------------- #
@@ -247,7 +306,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/services":
             self._send(200, services_status())
         elif self.path == "/api/peers":
-            self._send(200, PEERS)
+            self._send(200, {**PEERS, "openclaw-embed": OPENCLAW_EMBED})
+        elif self.path == "/api/schedules":
+            self._send(200, load_schedules())
         elif self.path == "/api/config":
             env = read_env_file()
             self._send(200, {
@@ -280,6 +341,22 @@ class Handler(BaseHTTPRequestHandler):
             res = run_aios("setup", "--non-interactive", "--skip-tools",
                            "--skip-install", "--skip-wire")  # re-render into agents
             self._send(200, {"ok": res["ok"], "saved": True})
+        elif self.path == "/api/schedules":
+            items = load_schedules()
+            op = payload.get("op", "add")
+            if op == "add":
+                items.append({"id": str(int(time.time() * 1000)), "name": payload.get("name", "task"),
+                              "target": payload.get("target", "brain"), "prompt": payload.get("prompt", ""),
+                              "every_minutes": int(payload.get("every_minutes", 60)),
+                              "enabled": True, "last_run": 0})
+            elif op == "delete":
+                items = [i for i in items if i.get("id") != payload.get("id")]
+            elif op == "toggle":
+                for i in items:
+                    if i.get("id") == payload.get("id"):
+                        i["enabled"] = not i.get("enabled", True)
+            save_schedules(items)
+            self._send(200, {"ok": True, "schedules": items})
         elif self.path == "/api/config_text":
             try:
                 CONFIG_FILE.write_text(payload.get("text", ""), encoding="utf-8")
@@ -306,8 +383,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    threading.Thread(target=_scheduler_loop, daemon=True).start()
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"AIOS Hub listening on http://127.0.0.1:{PORT}/  (dashboard + interconnect)")
+    print(f"AIOS Hub listening on http://127.0.0.1:{PORT}/  (dashboard + interconnect + scheduler)")
     print(f"peers: {json.dumps(PEERS)}")
     try:
         srv.serve_forever()

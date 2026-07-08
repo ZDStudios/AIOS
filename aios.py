@@ -259,6 +259,7 @@ PROJECTS = {
     "hermes": resolve_root("hermes-agent-main/hermes-agent-main", "hermes-agent-main", "hermes-agent"),
     "openclaw": resolve_root("openclaw-main/openclaw-main", "openclaw-main", "openclaw"),
     "crewai": resolve_root("crewAI-main/crewAI-main", "crewAI-main", "crewai"),
+    "claudecode": resolve_root("claude-code-api-main/claude-code-api-main", "claude-code-api-main", "claude-code-api"),
     # openclaw-os is the dashboard for openclaw (not a standalone agent).
     "openclaw_os": resolve_root("openclaw-os-main/openclaw-os-main", "openclaw-os-main", "openclaw-os"),
     "lifeos": resolve_root("LifeOS-main/LifeOS-main", "LifeOS-main", "LifeOS"),
@@ -415,6 +416,30 @@ def service_specs(cfg: dict) -> dict:
             "tool": "uv",
             "env": {"AIOS_CREWAI_PORT": str(port)},
         }
+    cc = PROJECTS["claudecode"]
+    if cc:
+        port = int(cfg_get(cfg, "services.claudecode.port", 8000))
+        specs["claudecode"] = {
+            "enabled": cfg_get(cfg, "services.claudecode.enabled", True),
+            "cwd": cc,
+            "cmd": ["uv", "run", "uvicorn", "claude_code_api.main:app", "--host", "127.0.0.1", "--port", str(port)],
+            "port": port,
+            "health": cfg_get(cfg, "health.claudecode", f"http://127.0.0.1:{port}/health"),
+            "tool": "uv",
+        }
+    # Frame-stripping reverse proxy so openclaw's control-UI embeds in the hub.
+    if cl and cfg_get(cfg, "services.openclaw_proxy.enabled", True):
+        pport = int(cfg_get(cfg, "services.openclaw_proxy.port", 8791))
+        oport = int(cfg_get(cfg, "services.openclaw.port", 18789))
+        specs["openclaw-proxy"] = {
+            "enabled": True,
+            "cwd": ROOT,
+            "cmd": [sys.executable, str(ROOT / "aios_proxy.py")],
+            "port": pport,
+            "health": cfg_get(cfg, "health.openclaw_proxy", f"http://127.0.0.1:{pport}/"),
+            "tool": "python",
+            "env": {"AIOS_PROXY_PORT": str(pport), "AIOS_PROXY_TARGET": f"http://127.0.0.1:{oport}"},
+        }
     # The AIOS Hub — unified dashboard + interconnect. Always available (stdlib).
     hport = int(cfg_get(cfg, "services.hub.port", 8787))
     specs["hub"] = {
@@ -433,7 +458,8 @@ def service_specs(cfg: dict) -> dict:
     return specs
 
 
-START_ORDER = ["opencode", "hermes", "hermes-gateway", "openclaw", "crewai", "hub"]
+START_ORDER = ["opencode", "hermes", "hermes-gateway", "openclaw", "openclaw-proxy",
+               "crewai", "claudecode", "hub"]
 
 
 def openclaw_env() -> dict:
@@ -449,6 +475,8 @@ def interconnect_env(cfg: dict) -> dict:
     hmp = cfg_get(cfg, "services.hermes.port", 9119)
     clp = cfg_get(cfg, "services.openclaw.port", 18789)
     crp = cfg_get(cfg, "services.crewai.port", 4788)
+    ccp = cfg_get(cfg, "services.claudecode.port", 8000)
+    pxp = cfg_get(cfg, "services.openclaw_proxy.port", 8791)
     hbp = cfg_get(cfg, "services.hub.port", 8787)
     return {
         "AIOS_ROOT": str(ROOT),
@@ -460,6 +488,8 @@ def interconnect_env(cfg: dict) -> dict:
         "AIOS_OPENCLAW_URL": f"http://127.0.0.1:{clp}",
         "AIOS_CREWAI_URL": f"http://127.0.0.1:{crp}",
         "AIOS_CREWAI_PORT": str(crp),
+        "AIOS_CLAUDECODE_URL": f"http://127.0.0.1:{ccp}",
+        "AIOS_OPENCLAWPROXY_URL": f"http://127.0.0.1:{pxp}/",
         "AIOS_OPENCLAWOS_URL": f"http://127.0.0.1:{clp}/plugins/openclawos/",
     }
 
@@ -628,6 +658,7 @@ def cmd_doctor(args):
         "openclaw_os": (PROJECTS["openclaw_os"], "node_modules"),
         "hermes": (PROJECTS["hermes"], ".venv"),
         "crewai": (PROJECTS["crewai"], ".venv"),
+        "claudecode": (PROJECTS["claudecode"], ".venv"),
     }
     for name, (base, marker) in checks.items():
         if base and (base / marker).exists():
@@ -855,6 +886,8 @@ def _install_all(cfg):
         ("openclaw_os", PROJECTS["openclaw_os"], "pnpm", ["install"]),
         # crewai: sync only the crewai package's env (avoids heavy optional extras).
         ("crewai", PROJECTS["crewai"], "uv", ["sync", "--package", "crewai"]),
+        # claude-code-api: FastAPI OpenAI-compatible wrapper for Claude Code.
+        ("claudecode", PROJECTS["claudecode"], "uv", ["sync"]),
     ]
     env = child_env()
     for name, base, tool, sub in jobs:

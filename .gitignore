@@ -39,3 +39,4 @@ openclaw-os-main/**/out/
 Thumbs.db
 **/.gradle/
 **/build/
+claude-code-api-main/.env

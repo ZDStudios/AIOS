@@ -27,6 +27,21 @@
     --alert:#ffd43b; --info:#74c0fc;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
   }
+  :root[data-theme="midnight"]{
+    --bg:#0b1020; --surface:#111834; --sunk:#0a0f1e; --sunk2:#151d3a; --elevated:#141c38; --border:#233056; --border-strong:#334268;
+    --text:#e6ecff; --text2:#9fb0d8; --text3:#6b7aa8; --accent:#60a5fa; --accent-strong:#93c5fd; --accent-soft:#132043; --accent-soft2:#1c2c58;
+    --success:#4ade80; --success-bg:#0f2a1a; --danger:#fb7185; --danger-bg:#2a1220; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.5);
+  }
+  :root[data-theme="slate"]{
+    --bg:#1c1f26; --surface:#22262f; --sunk:#181b21; --sunk2:#272c37; --elevated:#282d38; --border:#363c49; --border-strong:#454c5c;
+    --text:#e7eaf0; --text2:#a6adbb; --text3:#727a8a; --accent:#34d399; --accent-strong:#6ee7b7; --accent-soft:#122a22; --accent-soft2:#173a2e;
+    --success:#34d399; --success-bg:#122a22; --danger:#f87171; --danger-bg:#2a1717; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.4);
+  }
+  :root[data-theme="rose"]{
+    --bg:#fff7f9; --surface:#fdeef2; --sunk:#f8e2e9; --sunk2:#f3d7e0; --elevated:#ffffff; --border:#f0d0da; --border-strong:#e5b4c2;
+    --text:#3d1f2b; --text2:#7a5561; --text3:#a98593; --accent:#e11d74; --accent-strong:#be185d; --accent-soft:#fce7f0; --accent-soft2:#fbcfe1;
+    --success:#2b8a3e; --success-bg:#ebfbee; --danger:#e03131; --danger-bg:#fff5f5; --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(190,24,93,.08);
+  }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column;overflow:hidden;font-size:14px}
@@ -126,7 +141,13 @@
   <div class="brand"><span class="logo">◆</span> The AI OS <small>Workspace</small></div>
   <div class="top-actions">
     <button class="btn sm" onclick="act('restart')">↻ Restart all</button>
-    <button class="icon-btn" id="themeBtn" title="Toggle theme" onclick="toggleTheme()">◐</button>
+    <select id="themeSel" onchange="applyTheme(this.value)" title="Theme" style="padding:7px 10px;font-size:.82rem">
+      <option value="light">☀️ Light</option>
+      <option value="dark">🌙 Dark</option>
+      <option value="midnight">🌌 Midnight</option>
+      <option value="slate">🪨 Slate</option>
+      <option value="rose">🌹 Rose</option>
+    </select>
   </div>
 </header>
 
@@ -141,11 +162,13 @@
     <button class="nav" data-v="hermes" data-svc="hermes" onclick="nav('hermes')"><span class="ic">☤</span> hermes <span class="dot"></span></button>
     <button class="nav" data-v="openclaw" data-svc="openclaw" onclick="nav('openclaw')"><span class="ic">🦞</span> openclaw <span class="dot"></span></button>
     <button class="nav" data-v="crewai" data-svc="crewai" onclick="nav('crewai')"><span class="ic">👥</span> CrewAI <span class="dot"></span></button>
+    <button class="nav" data-v="claudecode" data-svc="claudecode" onclick="nav('claudecode')"><span class="ic">◈</span> claude-code <span class="dot"></span></button>
 
     <div class="sec">Dashboards</div>
     <button class="nav" data-v="openclawos" data-svc="openclaw-os" onclick="nav('openclawos')"><span class="ic">🪟</span> openclaw-os <span class="dot"></span></button>
 
     <div class="sec">System</div>
+    <button class="nav" data-v="automations" onclick="nav('automations')"><span class="ic">⏰</span> Automations</button>
     <button class="nav" data-v="settings" onclick="nav('settings')"><span class="ic">⚙️</span> Settings</button>
   </aside>
 
@@ -161,6 +184,7 @@
           <button class="chip active" data-t="brain">◆ Brain</button>
           <button class="chip" data-t="crewai">👥 CrewAI</button>
           <button class="chip" data-t="opencode">⌨️ opencode</button>
+          <button class="chip" data-t="claudecode">◈ claude-code</button>
           <button class="chip" data-t="all">🌐 All</button>
         </div>
         <div class="inrow">
@@ -173,11 +197,31 @@
     <!-- IFRAME AGENTS -->
     <div id="hermes" class="view"><div class="vhead"><h2>☤ hermes</h2><span class="sub">autonomous agent · dashboard</span><div class="right"><button class="btn sm" onclick="act('restart','hermes')">↻ Restart</button><a class="btn sm" id="hermesNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="hermesFrame"></iframe></div></div>
     <div id="openclawos" class="view"><div class="vhead"><h2>🪟 openclaw-os</h2><span class="sub">openclaw's generative-UI dashboard</span><div class="right"><a class="btn sm" id="osNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="osFrame"></iframe></div></div>
+    <div id="openclaw" class="view"><div class="vhead"><h2>🦞 openclaw</h2><span class="sub">channels · connectors · providers · skills · MCP · automations · sessions</span><div class="right"><button class="btn sm" onclick="act('restart','openclaw')">↻ Restart</button><a class="btn sm" id="clawNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="clawFrame"></iframe></div></div>
 
-    <!-- INFO AGENTS (opencode / openclaw / crewai) -->
+    <!-- INFO AGENTS (opencode / crewai / claude-code) -->
     <div id="opencode" class="view"><div class="vhead"><h2>⌨️ opencode</h2><span class="sub">coding-agent engine</span></div><div class="vbody pad" id="opencodeBody"></div></div>
-    <div id="openclaw" class="view"><div class="vhead"><h2>🦞 openclaw</h2><span class="sub">channel gateway + plugin host</span></div><div class="vbody pad" id="openclawBody"></div></div>
     <div id="crewai" class="view"><div class="vhead"><h2>👥 CrewAI</h2><span class="sub">multi-agent crews</span></div><div class="vbody pad" id="crewaiBody"></div></div>
+    <div id="claudecode" class="view"><div class="vhead"><h2>◈ claude-code</h2><span class="sub">Claude Code as an OpenAI-compatible API</span></div><div class="vbody pad" id="claudecodeBody"></div></div>
+
+    <!-- AUTOMATIONS -->
+    <div id="automations" class="view">
+      <div class="vhead"><h2>⏰ Automations</h2><span class="sub">schedule prompts to run against any agent</span></div>
+      <div class="vbody pad" style="max-width:820px">
+        <div class="card">
+          <h3>➕ New scheduled task</h3>
+          <p>Runs a prompt against an agent every N minutes — daily reports, checks, digests.</p>
+          <div class="grid2" style="margin-top:14px">
+            <div class="field"><label>Name</label><input id="schName" placeholder="Morning digest"></div>
+            <div class="field"><label>Run against</label><select id="schTarget"><option value="brain">Brain</option><option value="crewai">CrewAI</option><option value="opencode">opencode</option><option value="claudecode">claude-code</option></select></div>
+          </div>
+          <div class="field"><label>Prompt</label><textarea id="schPrompt" rows="2" placeholder="Summarize today's top AI news"></textarea></div>
+          <div class="field" style="max-width:220px"><label>Every (minutes)</label><input id="schEvery" type="number" value="60" min="1"></div>
+          <div class="row"><button class="btn primary" onclick="addSchedule()">Schedule it</button></div>
+        </div>
+        <div id="schList"></div>
+      </div>
+    </div>
 
     <!-- SETTINGS -->
     <div id="settings" class="view">
@@ -221,14 +265,13 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const ROLES={opencode:"coding engine",hermes:"autonomous agent",openclaw:"channel gateway",crewai:"multi-agent crews","openclaw-os":"dashboard",hub:"brain + interconnect"};
-  const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥","openclaw-os":"🪟",hub:"◆"};
+  const ROLES={opencode:"coding engine",hermes:"autonomous agent",openclaw:"channel gateway",crewai:"multi-agent crews",claudecode:"Claude Code API","openclaw-os":"dashboard",hub:"brain + interconnect"};
+  const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥",claudecode:"◈","openclaw-os":"🪟",hub:"◆"};
   let target="brain", peers={}, svc={}, history=[];
 
-  // theme
+  // themes
   const rootEl=document.documentElement;
-  function applyTheme(t){rootEl.setAttribute('data-theme',t);localStorage.aiosTheme=t;}
-  function toggleTheme(){applyTheme(rootEl.getAttribute('data-theme')==='dark'?'light':'dark');}
+  function applyTheme(t){rootEl.setAttribute('data-theme',t);localStorage.aiosTheme=t;const s=document.getElementById('themeSel');if(s)s.value=t;}
   applyTheme(localStorage.aiosTheme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
 
   function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
@@ -239,9 +282,11 @@
     document.querySelector('aside').classList.remove('open');
     if(v==='hermes')frame('hermesFrame','hermesNew',peers.hermes);
     if(v==='openclawos')frame('osFrame','osNew',peers['openclaw-os']);
+    if(v==='openclaw')frame('clawFrame','clawNew',peers['openclaw-embed']||peers.openclaw);
     if(v==='opencode')agentPanel('opencode','opencodeBody','The headless coding-agent engine. Chat with it from the Chat tab (target “opencode”) or call its HTTP API/SDK.',peers.opencode);
-    if(v==='openclaw')agentPanel('openclaw','openclawBody','Multi-channel gateway + plugin host. Its rich dashboard is <b>openclaw-os</b> (open that tab). The raw control panel can’t be embedded (it blocks framing), so open it in a new tab.',peers.openclaw,true);
     if(v==='crewai')agentPanel('crewai','crewaiBody','Role-based multi-agent crews. Chat with it from the Chat tab (target “CrewAI”). It can call the other agents via the hub.',peers.crewai);
+    if(v==='claudecode')agentPanel('claudecode','claudecodeBody','Claude Code exposed as an OpenAI-compatible API. Chat with it (target “claude-code”), or point any tool at <span class="mono">'+(peers.claudecode||'http://127.0.0.1:8000')+'/v1</span>. Needs the <span class="mono">claude</span> CLI installed + authenticated.',peers.claudecode);
+    if(v==='automations')loadSchedules();
     if(v==='settings')loadSettings();
   }
   function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
@@ -311,6 +356,24 @@
     await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,service})});
     setTimeout(refresh,1500);
   }
+
+  // automations
+  async function loadSchedules(){
+    try{const items=await(await fetch('/api/schedules')).json();
+      document.getElementById('schList').innerHTML=items.length?items.map(s=>`
+        <div class="card"><h3>${s.enabled?'🟢':'⚪'} ${s.name} <span class="badge ${s.enabled?'up':'down'}" style="margin-left:auto">every ${s.every_minutes}m</span></h3>
+          <p><b>→ ${s.target}</b>: ${s.prompt}</p>
+          ${s.last_reply?`<div class="kv" style="margin-top:8px;white-space:normal">last: ${(s.last_reply||'').slice(0,140)}</div>`:''}
+          <div class="row"><button class="btn sm" onclick="schOp('toggle','${s.id}')">${s.enabled?'Pause':'Resume'}</button><button class="btn sm danger" onclick="schOp('delete','${s.id}')">Delete</button></div></div>`).join(''):'<p style="color:var(--text3)">No scheduled tasks yet.</p>';
+    }catch(e){document.getElementById('schList').innerHTML='<p style="color:var(--text3)">Scheduler unavailable.</p>';}
+  }
+  async function addSchedule(){
+    const body={op:'add',name:document.getElementById('schName').value||'task',target:document.getElementById('schTarget').value,prompt:document.getElementById('schPrompt').value,every_minutes:+document.getElementById('schEvery').value||60};
+    if(!body.prompt){toast('Add a prompt first');return;}
+    await fetch('/api/schedules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    document.getElementById('schName').value='';document.getElementById('schPrompt').value='';toast('Scheduled');loadSchedules();
+  }
+  async function schOp(op,id){await fetch('/api/schedules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,id})});loadSchedules();}
 
   // status polling
   async function refresh(){
