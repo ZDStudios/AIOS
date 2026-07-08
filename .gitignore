@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────
+# The AI OS — combined repo .gitignore
+# Excludes secrets, orchestrator state, and everything `aios setup`
+# reinstalls or rebuilds. Source is committed; deps/artifacts are not.
+# ─────────────────────────────────────────────────────────────
+
+# ── Secrets & orchestrator state ──
+.aios/
+.env
+aios.config.yaml
+**/.env
+!**/.env.example
+!.env.example
+hermes-agent-main/**/cli-config.yaml
+
+# ── Dependencies (reinstalled by `aios setup`) ──
+**/node_modules/
+**/.venv/
+**/venv/
+**/__pycache__/
+*.py[cod]
+**/.pnpm-store/
+**/.pnpm/
+
+# ── Build outputs (rebuilt by `aios setup`) ──
+opencode-dev/**/dist/
+openclaw-main/**/dist/
+openclaw-main/**/dist-runtime/
+openclaw-os-main/**/dist/
+openclaw-os-main/**/.next/
+openclaw-os-main/**/out/
+**/.turbo/
+**/*.tsbuildinfo
+
+# ── Logs / caches / OS noise ──
+*.log
+.DS_Store
+Thumbs.db
+**/.gradle/
+**/build/

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 200" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <!-- window -->
+  <rect x="2" y="2" width="816" height="196" rx="14" fill="#0B0F14" stroke="#222A33" stroke-width="2"/>
+  <!-- title bar -->
+  <path d="M2 16 A14 14 0 0 1 16 2 H804 A14 14 0 0 1 818 16 V48 H2 Z" fill="#151A21"/>
+  <line x1="2" y1="48" x2="818" y2="48" stroke="#222A33" stroke-width="2"/>
+  <circle cx="30" cy="25" r="7" fill="#FF5F56"/>
+  <circle cx="54" cy="25" r="7" fill="#FFBD2E"/>
+  <circle cx="78" cy="25" r="7" fill="#27C93F"/>
+  <text x="108" y="30" fill="#6B7683" font-size="16">LifeOS — install</text>
+  <!-- body -->
+  <text x="34" y="98" fill="#586170" font-size="19"># one line — the whole system, installed</text>
+  <text x="34" y="146" font-size="22">
+    <tspan fill="#3FB950">$</tspan><tspan fill="#E6EDF3">  curl -fsSL https://ourlifeos.ai/install.sh | bash</tspan>
+  </text>
+</svg>

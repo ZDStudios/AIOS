@@ -1,0 +1,10 @@
+id = "pronunciations"
+title = "Pronunciations"
+dataType = "ReferencePageSchema"
+sourceGlobs = ["LIFEOS/USER/PRINCIPAL/PRONUNCIATIONS.json", "LIFEOS/USER/Pronunciations.md"]
+adapterPromptFile = "LIFEOS/PULSE/adapters/prompts/reference.md"
+model = "haiku"
+rebuildButton = true
+order = 80
+adapterVersion = "pronunciations-v1"
+staleAfterHours = 720

@@ -1,0 +1,10 @@
+id = "identity"
+title = "Identity"
+dataType = "NarrativePageSchema"
+sourceGlobs = ["LIFEOS/USER/PRINCIPAL/PRINCIPAL_IDENTITY.md"]
+adapterPromptFile = "LIFEOS/PULSE/adapters/prompts/identity.md"
+model = "sonnet"
+rebuildButton = true
+order = 1
+adapterVersion = "identity-v1"
+staleAfterHours = 720

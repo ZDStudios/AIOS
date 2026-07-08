@@ -1,0 +1,10 @@
+id = "goals"
+title = "Goals"
+dataType = "CollectionPageSchema"
+sourceGlobs = ["LIFEOS/USER/TELOS/TELOS.md"]
+adapterPromptFile = "LIFEOS/PULSE/adapters/prompts/goals.md"
+model = "haiku"
+rebuildButton = true
+order = 10
+adapterVersion = "goals-v1"
+staleAfterHours = 168

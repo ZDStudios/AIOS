@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# The AI OS launcher (POSIX / macOS / Linux / WSL / Git Bash).
+# Usage:  ./aios <command> [args...]      e.g.  ./aios doctor
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for py in python3 python py; do
+  if command -v "$py" >/dev/null 2>&1; then
+    exec "$py" "$here/aios.py" "$@"
+  fi
+done
+echo "Python 3 not found. Install it and retry." >&2
+exit 1

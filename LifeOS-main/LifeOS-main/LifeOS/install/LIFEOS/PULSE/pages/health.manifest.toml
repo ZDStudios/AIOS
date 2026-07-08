@@ -1,0 +1,10 @@
+id = "health"
+title = "Health"
+dataType = "IndexPageSchema"
+sourceGlobs = ["LIFEOS/USER/Health/README.md", "LIFEOS/USER/Health/*.md"]
+adapterPromptFile = "LIFEOS/PULSE/adapters/prompts/index.md"
+model = "haiku"
+rebuildButton = true
+order = 60
+adapterVersion = "health-index-v1"
+staleAfterHours = 168

@@ -1,0 +1,37 @@
+# The AI OS — configuration (single source of truth for non-secret wiring).
+# Secrets live in .env (never commit). Re-run `aios setup` after editing this file.
+# NOTE: aios ships a small YAML reader — use 2-space indentation and simple
+#       `key: value` maps (no anchors/multiline). This file already fits.
+version: 1
+log_level: info            # debug | info | warn | error
+
+# Model routing. The active provider's API key comes from .env (AIOS_LLM_API_KEY).
+model:
+  provider: openrouter     # openrouter | anthropic | openai | gemini
+  default: anthropic/claude-opus-4.6
+
+services:
+  opencode:                # coding-agent engine (headless server)
+    enabled: true
+    port: 4096
+    hostname: 127.0.0.1
+  hermes:                  # autonomous agent + web dashboard
+    enabled: true
+    port: 9119
+    hostname: 127.0.0.1
+    gateway: false         # also run the multi-channel gateway process
+  openclaw:                # messaging/channel gateway (hosts the front door)
+    enabled: true
+    port: 18789
+  openclaw_os:             # dashboard, installed as an openclaw plugin
+    enabled: true
+
+lifeos:
+  mount_skills: true       # copy LifeOS skills into openclaw + hermes skill dirs
+
+# Health-check URLs aios waits on during `start` and checks in `status`/`smoke`.
+health:
+  opencode: http://127.0.0.1:4096/
+  hermes: http://127.0.0.1:9119/
+  openclaw: http://127.0.0.1:18789/
+  openclaw_os: http://127.0.0.1:18789/plugins/openclawos/

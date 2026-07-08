@@ -1,0 +1,10 @@
+id = "books"
+title = "Books"
+dataType = "CollectionPageSchema"
+sourceGlobs = ["LIFEOS/USER/Books.md"]
+adapterPromptFile = "LIFEOS/PULSE/adapters/prompts/collection.md"
+model = "sonnet"
+rebuildButton = true
+order = 50
+adapterVersion = "books-v1"
+staleAfterHours = 168

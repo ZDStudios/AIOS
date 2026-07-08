@@ -1,0 +1,10 @@
+id = "beliefs"
+title = "Beliefs"
+dataType = "NarrativePageSchema"
+sourceGlobs = ["LIFEOS/USER/Beliefs.md", "LIFEOS/USER/TELOS/TELOS.md"]
+adapterPromptFile = "LIFEOS/PULSE/adapters/prompts/beliefs.md"
+model = "sonnet"
+rebuildButton = true
+order = 30
+adapterVersion = "beliefs-v1"
+staleAfterHours = 720
