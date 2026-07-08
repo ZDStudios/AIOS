@@ -8,6 +8,7 @@
 .aios/
 .env
 aios.config.yaml
+.claude/
 **/.env
 !**/.env.example
 !.env.example

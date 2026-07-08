@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The AI OS — Five open-source AI agents. One operating system.</title>
+<meta name="description" content="The AI OS unifies opencode, hermes, openclaw, openclaw-os and LifeOS into one auto-configured system you drive from a single command: aios.">
+<style>
+  :root{
+    --bg:#07080d; --bg2:#0b0d15; --panel:#11131d; --panel2:#151826;
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+    --tx:#e8eaf2; --mut:#9aa0b4; --dim:#6b7189;
+    --violet:#8b5cf6; --cyan:#06b6d4; --pink:#ec4899; --amber:#f59e0b; --red:#ef4444; --green:#22c55e;
+    --grad:linear-gradient(120deg,#8b5cf6 0%,#6366f1 40%,#06b6d4 100%);
+    --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Consolas,monospace;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--tx);font-family:var(--sans);line-height:1.6;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  .grad-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .mono{font-family:var(--mono)}
+
+  /* ── background glow ── */
+  .glow{position:fixed;inset:0;z-index:-1;overflow:hidden}
+  .glow::before,.glow::after{content:"";position:absolute;border-radius:50%;filter:blur(120px);opacity:.5}
+  .glow::before{width:620px;height:620px;background:radial-gradient(circle,#6d28d9,transparent 60%);top:-180px;left:-120px}
+  .glow::after{width:560px;height:560px;background:radial-gradient(circle,#0e7490,transparent 60%);top:120px;right:-160px;opacity:.4}
+
+  /* ── nav ── */
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(7,8,13,.72);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.02em;font-size:1.05rem}
+  .brand .logo{width:30px;height:30px;border-radius:8px;background:var(--grad);display:grid;place-items:center;font-size:16px;box-shadow:0 6px 20px rgba(124,58,237,.45)}
+  .nav-links{display:flex;align-items:center;gap:28px}
+  .nav-links a{color:var(--mut);font-size:.92rem;font-weight:500;transition:color .2s}
+  .nav-links a:hover{color:var(--tx)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:.9rem;padding:10px 18px;border-radius:10px;transition:transform .15s,box-shadow .2s,background .2s;white-space:nowrap}
+  .btn-primary{background:var(--grad);color:#fff;box-shadow:0 8px 24px rgba(124,58,237,.35)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(124,58,237,.5)}
+  .btn-ghost{border:1px solid var(--line2);color:var(--tx);background:rgba(255,255,255,.02)}
+  .btn-ghost:hover{background:rgba(255,255,255,.06);transform:translateY(-2px)}
+  @media(max-width:720px){.nav-links a:not(.btn){display:none}}
+
+  /* ── hero ── */
+  header{padding:96px 0 72px;text-align:center}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:.8rem;color:var(--mut);border:1px solid var(--line2);background:rgba(255,255,255,.03);padding:6px 14px;border-radius:999px;margin-bottom:28px}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  h1{font-size:clamp(2.6rem,7vw,5rem);line-height:1.02;letter-spacing:-.04em;font-weight:850;margin-bottom:8px}
+  .sub{font-size:clamp(1.1rem,2.6vw,1.5rem);color:var(--mut);font-weight:500;max-width:680px;margin:16px auto 0;letter-spacing:-.01em}
+  .hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:36px}
+  .chips{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+  .chip{font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--mut)}
+  .chip b{color:var(--tx)}
+
+  /* ── terminal ── */
+  .term{max-width:640px;margin:44px auto 0;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#0d0f18,#0a0b12);box-shadow:0 30px 80px rgba(0,0,0,.5);text-align:left}
+  .term-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .term-bar i{width:12px;height:12px;border-radius:50%;display:inline-block}
+  .term-bar .r{background:#ff5f57}.term-bar .y{background:#febc2e}.term-bar .g{background:#28c840}
+  .term-bar span{margin-left:8px;color:var(--dim);font-size:.8rem;font-family:var(--mono)}
+  .term-body{padding:20px 22px;font-family:var(--mono);font-size:.9rem;line-height:1.9}
+  .term-body .c{color:var(--dim)}
+  .term-body .p{color:var(--violet)}
+  .term-body .ok{color:var(--green)}
+  .term-body .cmd{color:var(--tx)}
+
+  /* ── sections ── */
+  section{padding:80px 0;position:relative}
+  .eyebrow{font-size:.82rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);margin-bottom:12px;text-align:center}
+  h2{font-size:clamp(1.8rem,4vw,2.6rem);font-weight:800;letter-spacing:-.03em;text-align:center;line-height:1.1}
+  .lead{color:var(--mut);text-align:center;max-width:620px;margin:16px auto 0;font-size:1.05rem}
+
+  /* ── project cards ── */
+  .grid{display:grid;gap:18px;margin-top:52px}
+  .g5{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .card{position:relative;border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--bg2));border-radius:16px;padding:26px;transition:transform .2s,border-color .2s,box-shadow .3s}
+  .card:hover{transform:translateY(-4px);border-color:var(--line2);box-shadow:0 20px 50px rgba(0,0,0,.4)}
+  .card .ico{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;font-size:22px;margin-bottom:16px}
+  .card h3{font-size:1.15rem;font-weight:750;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+  .card .role{color:var(--mut);font-size:.94rem;margin-top:8px}
+  .card .port{font-family:var(--mono);font-size:.78rem;color:var(--cyan);margin-top:14px;border:1px solid var(--line);display:inline-block;padding:3px 9px;border-radius:6px}
+  .feat h3{font-size:1.05rem}
+  .feat .role{margin-top:10px}
+
+  /* ── architecture ── */
+  .arch{margin-top:52px;border:1px solid var(--line);border-radius:18px;background:radial-gradient(120% 120% at 50% 0%,var(--panel2),var(--bg));padding:40px 28px}
+  .layer{display:flex;flex-direction:column;align-items:center;gap:18px}
+  .node{border:1px solid var(--line2);border-radius:12px;padding:16px 22px;background:var(--panel);text-align:center;min-width:230px;transition:transform .2s,box-shadow .2s}
+  .node:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.4)}
+  .node b{display:block;font-size:1rem;letter-spacing:-.01em}
+  .node small{color:var(--mut);font-size:.82rem}
+  .node .tag{font-family:var(--mono);font-size:.72rem;color:var(--cyan)}
+  .front{border-color:rgba(139,92,246,.5);box-shadow:0 0 0 1px rgba(139,92,246,.15),0 16px 40px rgba(124,58,237,.2)}
+  .row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+  .conn{color:var(--dim);font-size:1.4rem;line-height:1}
+  .base{border-style:dashed;border-color:rgba(6,182,212,.4)}
+
+  /* ── steps ── */
+  .steps{margin-top:48px;display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .step{border:1px solid var(--line);border-radius:14px;padding:24px;background:var(--panel)}
+  .step .n{width:34px;height:34px;border-radius:9px;background:var(--grad);color:#fff;font-weight:800;display:grid;place-items:center;margin-bottom:14px}
+  .step h4{font-size:1.05rem;font-weight:700}
+  .step p{color:var(--mut);font-size:.92rem;margin-top:6px}
+  .step code{font-family:var(--mono);font-size:.82rem;color:var(--amber);background:rgba(245,158,11,.08);padding:2px 7px;border-radius:5px}
+
+  /* ── code block ── */
+  .codeblock{margin-top:26px;border:1px solid var(--line);border-radius:12px;background:#0a0b12;font-family:var(--mono);font-size:.86rem;overflow-x:auto}
+  .codeblock .h{padding:9px 16px;border-bottom:1px solid var(--line);color:var(--dim);font-size:.78rem}
+  .codeblock pre{padding:18px 16px;line-height:1.8;color:#cfd3e3}
+  .codeblock .c{color:var(--dim)}
+  .codeblock .g{color:var(--green)}
+
+  /* ── command table ── */
+  .cmds{margin-top:44px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .cmdrow{display:grid;grid-template-columns:220px 1fr;gap:16px;padding:15px 22px;border-bottom:1px solid var(--line);align-items:center}
+  .cmdrow:last-child{border-bottom:0}
+  .cmdrow:hover{background:rgba(255,255,255,.02)}
+  .cmdrow code{font-family:var(--mono);font-size:.86rem;color:var(--violet)}
+  .cmdrow span{color:var(--mut);font-size:.92rem}
+  @media(max-width:640px){.cmdrow{grid-template-columns:1fr;gap:4px}}
+
+  /* ── footer ── */
+  footer{border-top:1px solid var(--line);padding:56px 0 40px;margin-top:40px}
+  .credits{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:24px 0 30px}
+  .credits a{font-size:.86rem;color:var(--mut);border:1px solid var(--line);padding:8px 14px;border-radius:9px;background:var(--panel);transition:all .2s}
+  .credits a:hover{color:var(--tx);border-color:var(--line2);transform:translateY(-2px)}
+  .foot-bottom{text-align:center;color:var(--dim);font-size:.85rem}
+
+  .reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="logo">🧠</span> The AI OS</a>
+    <div class="nav-links">
+      <a href="#projects">Projects</a>
+      <a href="#features">Features</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#quickstart">Quickstart</a>
+      <a class="btn btn-ghost" href="https://github.com/ZDStudios/AIOS" target="_blank" rel="noopener">★ GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header id="top">
+  <div class="wrap">
+    <div class="pill"><span class="dot"></span> Verified on Windows 11 · one command to run</div>
+    <h1>Five open-source AI agents.<br><span class="grad-text">One operating system.</span></h1>
+    <p class="sub">The AI OS unifies <b>opencode</b>, <b>hermes</b>, <b>openclaw</b>, <b>openclaw-os</b> and <b>LifeOS</b> into a single auto-configured system you drive from one command: <span class="mono">aios</span>.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#quickstart">Get started →</a>
+      <a class="btn btn-ghost" href="https://github.com/ZDStudios/AIOS" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+    <div class="chips">
+      <span class="chip"><b>1</b> control script</span>
+      <span class="chip"><b>1</b> config</span>
+      <span class="chip"><b>1</b> API key → <b>4</b> agents</span>
+      <span class="chip"><b>0</b> extra deps</span>
+    </div>
+
+    <div class="term">
+      <div class="term-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>aios — The AI OS</span></div>
+      <div class="term-body">
+        <div><span class="p">$</span> <span class="cmd">aios setup</span>   <span class="c"># install, configure, wire everything</span></div>
+        <div><span class="ok">✓</span> toolchains · deps · build · skills mounted</div>
+        <div><span class="p">$</span> <span class="cmd">aios start</span></div>
+        <div><span class="ok">✓</span> opencode :4096 &nbsp; <span class="ok">✓</span> hermes :9119 &nbsp; <span class="ok">✓</span> openclaw :18789</div>
+        <div><span class="p">$</span> <span class="cmd">aios url</span></div>
+        <div class="c">→ http://127.0.0.1:18789/plugins/openclawos/</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="projects">
+  <div class="wrap">
+    <div class="eyebrow reveal">The stack</div>
+    <h2 class="reveal">Five projects, one system</h2>
+    <p class="lead reveal">Each stays intact and upgradable. The AI OS installs, configures, and wires them — it doesn't fork them.</p>
+    <div class="grid g5">
+      <div class="card reveal">
+        <div class="ico" style="background:rgba(236,72,153,.14);color:var(--pink)">⌨️</div>
+        <h3>opencode</h3>
+        <div class="role">The coding-agent engine — a headless server + SDK the other agents can call.</div>
+        <div class="port">:4096</div>
+      </div>
+      <div class="card reveal">
+        <div class="ico" style="background:rgba(245,158,11,.14);color:var(--amber)">☤</div>
+        <h3>hermes</h3>
+        <div class="role">Autonomous agent with memory, cron, a learning loop, and its own dashboard.</div>
+        <div class="port">:9119</div>
+      </div>
+      <div class="card reveal">
+        <div class="ico" style="background:rgba(239,68,68,.14);color:var(--red)">🦞</div>
+        <h3>openclaw</h3>
+        <div class="role">Multi-channel messaging gateway and plugin host — Telegram, Discord, Slack…</div>
+        <div class="port">:18789</div>
+      </div>
+      <div class="card reveal">
+        <div class="ico" style="background:rgba(6,182,212,.14);color:var(--cyan)">🪟</div>
+        <h3>openclaw-os</h3>
+        <div class="role">The generative-UI dashboard — the front door, served inside the gateway.</div>
+        <div class="port">/plugins/openclawos/</div>
+      </div>
+      <div class="card reveal">
+        <div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">🧬</div>
+        <h3>LifeOS</h3>
+        <div class="role">Shared identity + skills, mounted into the agents so they know you.</div>
+        <div class="port">skills layer</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow reveal">Why it's nice</div>
+    <h2 class="reveal">What you get</h2>
+    <div class="grid g3">
+      <div class="card feat reveal"><div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">⚡</div><h3>One command to rule them all</h3><div class="role"><span class="mono">aios setup</span> installs bun / pnpm / uv / Node, every project's deps, builds what needs building, and wires it together. Idempotent.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(6,182,212,.14);color:var(--cyan)">🔑</div><h3>One key, every agent</h3><div class="role">Set your provider + API key once in <span class="mono">.env</span>. The AI OS maps it into each project's config — change it in one place.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(236,72,153,.14);color:var(--pink)">🪟</div><h3>A dashboard front door</h3><div class="role">The openclaw-os generative-UI workspace: sessions, live apps, charts and forms in one pane of glass.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(34,197,94,.14);color:var(--green)">🩺</div><h3>Doctor that tells you the fix</h3><div class="role"><span class="mono">aios doctor</span> checks toolchains, config, deps and ports — and prints the exact command to fix each problem.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(245,158,11,.14);color:var(--amber)">🧪</div><h3>Unified testing & debugging</h3><div class="role"><span class="mono">aios test --smoke</span> drives the whole stack end-to-end. <span class="mono">aios debug</span> dumps resolved config with secrets masked.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">🪟</div><h3>Windows-first, cross-platform</h3><div class="role">Built and verified on Windows 11 (PowerShell), with POSIX / macOS / Linux / WSL parity. Zero-dependency Python core.</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <div class="eyebrow reveal">How it fits together</div>
+    <h2 class="reveal">Architecture</h2>
+    <div class="arch reveal">
+      <div class="layer">
+        <div class="node front">
+          <b>openclaw-os · dashboard</b>
+          <span class="tag">:18789/plugins/openclawos/</span>
+        </div>
+        <div class="conn">▲ served as a plugin inside</div>
+        <div class="node" style="min-width:280px">
+          <b>openclaw · gateway <span class="tag">:18789</span></b>
+          <small>channels + plugin host</small>
+        </div>
+        <div class="conn">▲ &nbsp; ▲</div>
+        <div class="row">
+          <div class="node">
+            <b>hermes · dashboard <span class="tag">:9119</span></b>
+            <small>autonomous · memory · cron</small>
+          </div>
+          <div class="node">
+            <b>opencode · server <span class="tag">:4096</span></b>
+            <small>coding engine · HTTP / SDK</small>
+          </div>
+        </div>
+        <div class="conn">▲ shared skills / context</div>
+        <div class="node base" style="min-width:280px">
+          <b>LifeOS</b>
+          <small>identity + skills mounted into the agents</small>
+        </div>
+      </div>
+    </div>
+    <p class="lead reveal" style="margin-top:30px">Single source of truth: <span class="mono">aios.config.yaml</span> + <span class="mono">.env</span>, rendered into each project's native config. Single control surface: <span class="mono">./aios &lt;command&gt;</span>.</p>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <div class="eyebrow reveal">60 seconds</div>
+    <h2 class="reveal">Quickstart</h2>
+    <div class="steps">
+      <div class="step reveal"><div class="n">1</div><h4>Setup</h4><p>Installs toolchains + deps, creates <code>.env</code>, renders config, builds, wires the dashboard, mounts skills.</p></div>
+      <div class="step reveal"><div class="n">2</div><h4>Add your key</h4><p>The wizard asks for your model provider and API key — one key powers all four agents.</p></div>
+      <div class="step reveal"><div class="n">3</div><h4>Start</h4><p>Brings every service up with health checks, then <code>aios url</code> opens the dashboard.</p></div>
+    </div>
+    <div class="codeblock reveal">
+      <div class="h">PowerShell — Windows</div>
+<pre><span class="c"># from the "The AI OS" folder</span>
+.\aios.ps1 setup      <span class="c"># install + configure + wire everything</span>
+.\aios.ps1 start      <span class="g"># ✓ opencode  ✓ hermes  ✓ openclaw</span>
+.\aios.ps1 url        <span class="c"># open the dashboard</span></pre>
+    </div>
+    <div class="codeblock reveal">
+      <div class="h">Bash — macOS / Linux / WSL</div>
+<pre>./aios setup &amp;&amp; ./aios start &amp;&amp; ./aios url</pre>
+    </div>
+  </div>
+</section>
+
+<section id="commands" style="padding-top:20px">
+  <div class="wrap">
+    <div class="eyebrow reveal">The control surface</div>
+    <h2 class="reveal">Command reference</h2>
+    <div class="cmds reveal">
+      <div class="cmdrow"><code>aios setup</code><span>Install toolchains + deps, run the secrets wizard, render config, build, mount skills, wire the dashboard.</span></div>
+      <div class="cmdrow"><code>aios start [svc]</code><span>Start service(s), wait on health checks, keep unified logs.</span></div>
+      <div class="cmdrow"><code>aios stop [svc]</code><span>Stop service(s); kills the whole process tree — no orphans.</span></div>
+      <div class="cmdrow"><code>aios status</code><span>Table of each service: state, port, PID, health.</span></div>
+      <div class="cmdrow"><code>aios doctor</code><span>Diagnose tools, config, deps and ports — with the exact fix for each.</span></div>
+      <div class="cmdrow"><code>aios test --smoke</code><span>Run test suites, or drive the whole stack end-to-end.</span></div>
+      <div class="cmdrow"><code>aios logs [svc]</code><span>Tail a service log from <span class="mono">.aios/logs/</span>.</span></div>
+      <div class="cmdrow"><code>aios url</code><span>Print the dashboard + service URLs.</span></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <h2 class="reveal" style="font-size:1.5rem">Built on the shoulders of giants</h2>
+    <p class="lead reveal" style="font-size:.96rem">The AI OS is an integration layer. All the heavy lifting is done by these open-source projects — go star them.</p>
+    <div class="credits reveal">
+      <a href="https://opencode.ai" target="_blank" rel="noopener">opencode</a>
+      <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">hermes-agent · Nous Research</a>
+      <a href="https://github.com/openclaw/openclaw" target="_blank" rel="noopener">openclaw</a>
+      <a href="https://github.com/thesysdev/openclaw-os" target="_blank" rel="noopener">openclaw-os · thesys</a>
+      <a href="https://github.com/danielmiessler/LifeOS" target="_blank" rel="noopener">LifeOS · Daniel Miessler</a>
+    </div>
+    <div class="foot-bottom">
+      MIT Licensed · bundled projects retain their own licenses.<br>
+      <span style="color:var(--mut)">The AI OS</span> · built with <a href="https://claude.com/claude-code" style="color:var(--violet)">Claude Code</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
+  document.querySelectorAll('.reveal').forEach((el,i)=>{el.style.transitionDelay=(i%4*60)+'ms';io.observe(el)});
+</script>
+</body>
+</html>
