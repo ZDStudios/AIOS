@@ -38,6 +38,9 @@ lifeos:
 openui:
   mount_context: true      # mount OpenUI (generative UI) context into the agents
 
+updates:
+  check_on_start: true     # on `aios start`, check the repo for updates and notify
+
 # Health-check URLs aios waits on during `start` and checks in `status`/`smoke`.
 health:
   opencode: http://127.0.0.1:4096/

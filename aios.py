@@ -710,9 +710,23 @@ def cmd_setup(args):
     if cfg_get(cfg, "services.openclaw_os.enabled", True) and not args.skip_wire:
         wire_openclaw_os(quiet=True)
 
+    # 8) offer to run on login/boot
+    interactive = sys.stdin.isatty() and not args.non_interactive
+    if interactive and not autostart_status():
+        ans = input(f"\n  Start The AI OS automatically on login/boot? {C.GRY}[y/N]{C.R}: ").strip().lower()
+        if ans in ("y", "yes"):
+            autostart_enable()
+
+    hbp = int(cfg_get(cfg, "services.hub.port", 8787))
     say()
-    ok("setup complete.")
-    say(f"Next: {C.B}aios start{C.R}   then open the dashboard with {C.B}aios url{C.R}")
+    say(f"{C.B}{C.GRN}  ✓ The AI OS is ready.{C.R}")
+    say(f"\n  {C.B}aios start{C.R}   bring the whole stack up")
+    say(f"  {C.B}aios url{C.R}     open the Control Room → {C.CYN}http://127.0.0.1:{hbp}/{C.R}")
+    say(f"  {C.B}aios doctor{C.R}  check everything is healthy")
+    if interactive:
+        go = input(f"\n  Start it now? {C.GRY}[Y/n]{C.R}: ").strip().lower()
+        if go in ("", "y", "yes"):
+            cmd_start(argparse.Namespace(service=["all"], timeout=90))
 
 
 def _ensure_gitignore():
@@ -741,36 +755,49 @@ def _wizard_env(args):
         ok(f"backed up existing .env → {bak.relative_to(ROOT)}")
 
     interactive = sys.stdin.isatty() and not args.non_interactive
+    skip = getattr(args, "skip_keys", False)
     data = load_env(ENV_EXAMPLE) if ENV_EXAMPLE.exists() else {}
     data.update(secrets)  # keep existing values
 
-    if interactive:
-        head("Secrets wizard (press Enter to keep current/blank)")
-        prov = input(f"  Model provider [openrouter/anthropic/openai] "
-                     f"({data.get('AIOS_LLM_PROVIDER','openrouter')}): ").strip()
-        data["AIOS_LLM_PROVIDER"] = prov or data.get("AIOS_LLM_PROVIDER", "openrouter")
-        key = input(f"  API key ({mask(data.get('AIOS_LLM_API_KEY',''))}): ").strip()
-        if key:
-            data["AIOS_LLM_API_KEY"] = key
-        model = input(f"  Default model ({data.get('AIOS_DEFAULT_MODEL','anthropic/claude-opus-4.6')}): ").strip()
-        data["AIOS_DEFAULT_MODEL"] = model or data.get("AIOS_DEFAULT_MODEL", "anthropic/claude-opus-4.6")
-        say("  Optional channel tokens (Enter to skip):")
-        for ck in CHANNEL_KEYS:
-            cur = data.get(ck, "")
-            val = input(f"    {ck} ({mask(cur)}): ").strip()
-            if val:
-                data[ck] = val
-    else:
-        for var, default in (("AIOS_LLM_PROVIDER", "openrouter"),
-                             ("AIOS_LLM_API_KEY", ""),
-                             ("AIOS_DEFAULT_MODEL", "anthropic/claude-opus-4.6")):
-            envv = os.environ.get(var)
-            if envv:  # explicit env var wins over example/blank
-                data[var] = envv
-            else:
-                data.setdefault(var, default)
+    # Fill sane defaults for anything missing.
+    for var, default in (("AIOS_LLM_PROVIDER", "openrouter"),
+                         ("AIOS_LLM_API_KEY", ""),
+                         ("AIOS_DEFAULT_MODEL", "anthropic/claude-opus-4.6")):
+        data.setdefault(var, default)
+
+    if interactive and not skip:
+        head("Model setup")
+        gate = input("  Set up your model provider + API key now? "
+                     f"{C.GRY}(Enter=yes · type 'skip' to do it later){C.R} [Y/n/skip]: ").strip().lower()
+        if gate in ("n", "no", "s", "skip"):
+            skip = True
+
+    if skip:
+        warn("skipped model setup — the stack still runs, but agents need a key to answer.")
+        say(f"  Add it any time: {C.B}aios setup --force{C.R}, edit {C.B}.env{C.R}, "
+            f"or use the hub's {C.B}Settings{C.R} panel.")
+    elif interactive:
+        prov = input(f"  Provider [openrouter/anthropic/openai/gemini] ({data['AIOS_LLM_PROVIDER']}): ").strip().lower()
+        if prov in ("skip", "none"):
+            skip = True
+        else:
+            data["AIOS_LLM_PROVIDER"] = prov or data["AIOS_LLM_PROVIDER"]
+            key = input(f"  API key ({mask(data.get('AIOS_LLM_API_KEY', ''))}): ").strip()
+            if key:
+                data["AIOS_LLM_API_KEY"] = key
+            model = input(f"  Default model ({data['AIOS_DEFAULT_MODEL']}): ").strip()
+            data["AIOS_DEFAULT_MODEL"] = model or data["AIOS_DEFAULT_MODEL"]
+            say(f"  {C.GRY}Optional channel tokens (Enter to skip each):{C.R}")
+            for ck in CHANNEL_KEYS:
+                val = input(f"    {ck} ({mask(data.get(ck, ''))}): ").strip()
+                if val:
+                    data[ck] = val
+    else:  # non-interactive: env-driven
+        for var in ("AIOS_LLM_PROVIDER", "AIOS_LLM_API_KEY", "AIOS_DEFAULT_MODEL"):
+            if os.environ.get(var):
+                data[var] = os.environ[var]
         if not data.get("AIOS_LLM_API_KEY"):
-            warn("non-interactive: wrote .env skeleton (fill AIOS_LLM_API_KEY before start)")
+            warn("non-interactive: wrote .env skeleton (add AIOS_LLM_API_KEY later)")
 
     ordered = {}
     for k in ["AIOS_LLM_PROVIDER", "AIOS_LLM_API_KEY", "AIOS_DEFAULT_MODEL"] + PASSTHROUGH_KEYS + \
@@ -1096,8 +1123,11 @@ def wire_openclaw_os(quiet=False):
 def cmd_start(args):
     cfg = load_config()
     secrets = load_env(ENV_PATH)
+    if cfg_get(cfg, "updates.check_on_start", True):
+        _check_updates_notice()
     if not secrets.get("AIOS_LLM_API_KEY") and not any(secrets.get(v) for v in PROVIDER_VAR.values()):
-        warn("no model API key in .env — agents may fail to answer. Run `aios setup`.")
+        warn("no model API key set — the stack runs, but agents need a key to answer "
+             "(add it in the hub Settings panel or `aios setup --force`).")
     specs = service_specs(cfg)
     targets = _select(args.service, specs)
     head(f"Starting: {', '.join(targets)}")
@@ -1275,13 +1305,162 @@ def cmd_debug(args):
 
 def cmd_update(args):
     head("The AI OS — update")
+    if getattr(args, "check", False):
+        _check_updates_notice()  # fetch + report only, no pull
+        ok("check complete.")
+        return
     cfg = load_config()
     secrets = load_env(ENV_PATH)
-    _install_all(cfg)
+    changed = _git_pull()
+    if changed is False and not getattr(args, "force", False):
+        ok("already up to date — nothing to reinstall (use --force to reinstall anyway).")
+    else:
+        _install_all(cfg)
     render_native(cfg, secrets)
     if cfg_get(cfg, "lifeos.mount_skills", True):
         mount_lifeos(cfg)
+    if cfg_get(cfg, "openui.mount_context", True):
+        mount_openui(cfg)
     ok("update complete.")
+
+
+def _git_pull() -> bool | None:
+    """Pull latest from the repo. Returns True if new commits arrived, False if
+    already current, None if not a git checkout / offline."""
+    git = find_tool("git")
+    if not git or not (ROOT / ".git").exists():
+        warn("not a git checkout — skipping repo update (installed via zip?).")
+        return None
+    env = child_env()
+    before = subprocess.run([git, "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, env=env).stdout.strip()
+    print(f"{C.GRY}$ git pull --ff-only{C.R}")
+    rc = subprocess.run([git, "pull", "--ff-only"], cwd=ROOT, env=env).returncode
+    if rc != 0:
+        warn("git pull failed (local changes or offline?) — continuing with current code.")
+        return None
+    after = subprocess.run([git, "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, env=env).stdout.strip()
+    if before and after and before != after:
+        ok(f"updated {before[:7]} → {after[:7]}")
+        return True
+    ok("repo already up to date.")
+    return False
+
+
+def _check_updates_notice():
+    """Quietly tell the user if the remote is ahead (called on start)."""
+    git = find_tool("git")
+    if not git or not (ROOT / ".git").exists():
+        return
+    env = child_env()
+    try:
+        subprocess.run([git, "fetch", "--quiet"], cwd=ROOT, env=env, timeout=15,
+                       capture_output=True)
+        counts = subprocess.run([git, "rev-list", "--count", "HEAD..@{u}"], cwd=ROOT,
+                                capture_output=True, text=True, env=env, timeout=10).stdout.strip()
+        if counts.isdigit() and int(counts) > 0:
+            warn(f"{int(counts)} update(s) available on the repo → run {C.B}aios update{C.R}")
+    except Exception:
+        pass
+
+
+# --------------------------------------------------------------------------- #
+# Autostart (run on login / boot)                                              #
+# --------------------------------------------------------------------------- #
+def _win_startup_cmd() -> Path:
+    return Path(os.environ.get("APPDATA", Path.home())) / \
+        "Microsoft/Windows/Start Menu/Programs/Startup/aios.cmd"
+
+
+def _systemd_unit() -> Path:
+    return Path.home() / ".config/systemd/user/aios.service"
+
+
+def _bashrc_marker() -> str:
+    return "# >>> The AI OS autostart >>>"
+
+
+def autostart_status() -> bool:
+    if IS_WIN:
+        return _win_startup_cmd().exists()
+    if _systemd_unit().exists():
+        return True
+    rc = Path.home() / ".bashrc"
+    return rc.exists() and _bashrc_marker() in rc.read_text(encoding="utf-8", errors="ignore")
+
+
+def autostart_enable():
+    py = sys.executable
+    if IS_WIN:
+        p = _win_startup_cmd()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f'@echo off\ncd /d "{ROOT}"\n"{py}" "{ROOT / "aios.py"}" start all\n', encoding="utf-8")
+        ok(f"autostart enabled → {p}")
+        return
+    # Linux: prefer a systemd user service; fall back to a ~/.bashrc hook (WSL).
+    have_systemd = shutil.which("systemctl") and Path("/run/systemd/system").exists()
+    if have_systemd:
+        unit = _systemd_unit()
+        unit.parent.mkdir(parents=True, exist_ok=True)
+        unit.write_text(
+            "[Unit]\nDescription=The AI OS\nAfter=network-online.target\n\n"
+            f"[Service]\nType=oneshot\nRemainAfterExit=yes\nWorkingDirectory={ROOT}\n"
+            f"ExecStart={py} {ROOT / 'aios.py'} start all\n"
+            f"ExecStop={py} {ROOT / 'aios.py'} stop all\n\n"
+            "[Install]\nWantedBy=default.target\n", encoding="utf-8")
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+        subprocess.run(["systemctl", "--user", "enable", "aios.service"], capture_output=True)
+        ok(f"autostart enabled (systemd user service) → {unit}")
+        say(f"  {C.GRY}start now: systemctl --user start aios{C.R}")
+    else:
+        rc = Path.home() / ".bashrc"
+        block = (f"\n{_bashrc_marker()}\n"
+                 f'[ -z "$AIOS_STARTED" ] && command -v python3 >/dev/null && '
+                 f'( curl -s -o /dev/null http://127.0.0.1:{8787} 2>/dev/null || '
+                 f'python3 "{ROOT / "aios.py"}" start all >/dev/null 2>&1 & ) ; export AIOS_STARTED=1\n'
+                 f"# <<< The AI OS autostart <<<\n")
+        with open(rc, "a", encoding="utf-8") as f:
+            f.write(block)
+        ok(f"autostart enabled (~/.bashrc hook — WSL/no-systemd) → starts on first shell")
+
+
+def autostart_disable():
+    if IS_WIN:
+        p = _win_startup_cmd()
+        if p.exists():
+            p.unlink()
+            ok("autostart disabled (removed Startup shortcut).")
+        else:
+            ok("autostart was not enabled.")
+        return
+    removed = False
+    if _systemd_unit().exists():
+        subprocess.run(["systemctl", "--user", "disable", "aios.service"], capture_output=True)
+        _systemd_unit().unlink()
+        removed = True
+    rc = Path.home() / ".bashrc"
+    if rc.exists() and _bashrc_marker() in rc.read_text(encoding="utf-8", errors="ignore"):
+        lines = rc.read_text(encoding="utf-8").splitlines()
+        out, skip = [], False
+        for ln in lines:
+            if ln.strip() == _bashrc_marker():
+                skip = True
+            if not skip:
+                out.append(ln)
+            if ln.strip() == "# <<< The AI OS autostart <<<":
+                skip = False
+        rc.write_text("\n".join(out) + "\n", encoding="utf-8")
+        removed = True
+    ok("autostart disabled." if removed else "autostart was not enabled.")
+
+
+def cmd_autostart(args):
+    action = getattr(args, "action", "status")
+    if action == "enable":
+        autostart_enable()
+    elif action == "disable":
+        autostart_disable()
+    else:
+        say("autostart: " + (f"{C.GRN}enabled{C.R}" if autostart_status() else f"{C.GRY}disabled{C.R}"))
 
 
 def cmd_url(args):
@@ -1296,11 +1475,20 @@ def cmd_wire(args):
 # Helpers for commands                                                         #
 # --------------------------------------------------------------------------- #
 def _select(service, specs) -> list:
-    if not service or service == "all":
-        return [s for s in specs.keys()]
-    if service not in specs:
-        die(f"unknown service '{service}'. Known: {', '.join(specs)} (or 'all')")
-    return [service]
+    # Accept a string, a list of names, "all", or None.
+    if not service or service == "all" or service == ["all"]:
+        return list(specs.keys())
+    names = [service] if isinstance(service, str) else list(service)
+    if names == ["all"]:
+        return list(specs.keys())
+    out = []
+    for n in names:
+        if n == "all":
+            return list(specs.keys())
+        if n not in specs:
+            die(f"unknown service '{n}'. Known: {', '.join(specs)} (or 'all')")
+        out.append(n)
+    return out
 
 
 def _openclaw_os_url(cfg) -> str | None:
@@ -1336,21 +1524,23 @@ def build_parser():
     s = sub.add_parser("setup", help="install toolchains+deps, create .env/config, render + wire")
     s.add_argument("--force", action="store_true", help="re-run the secrets wizard / overwrite")
     s.add_argument("--non-interactive", action="store_true")
+    s.add_argument("--skip-keys", action="store_true", help="skip the model API-key wizard (add it later)")
     s.add_argument("--skip-tools", action="store_true")
     s.add_argument("--skip-install", action="store_true", help="skip dependency install (fast config-only)")
     s.add_argument("--skip-wire", action="store_true")
     s.set_defaults(func=cmd_setup)
 
     sub.add_parser("bootstrap", help="alias for setup").set_defaults(
-        func=cmd_setup, force=False, non_interactive=False, skip_tools=False, skip_install=False, skip_wire=False)
+        func=cmd_setup, force=False, non_interactive=False, skip_keys=False,
+        skip_tools=False, skip_install=False, skip_wire=False)
 
-    s = sub.add_parser("start", help="start service(s)")
-    s.add_argument("service", nargs="?", default="all")
+    s = sub.add_parser("start", help="start service(s): opencode hermes openclaw crewai hub (or all)")
+    s.add_argument("service", nargs="*", default=["all"])
     s.add_argument("--timeout", type=int, default=90)
     s.set_defaults(func=cmd_start)
 
     s = sub.add_parser("stop", help="stop service(s)")
-    s.add_argument("service", nargs="?", default="all")
+    s.add_argument("service", nargs="*", default=["all"])
     s.set_defaults(func=cmd_stop)
 
     sub.add_parser("status", help="show service status").set_defaults(func=cmd_status)
@@ -1370,7 +1560,15 @@ def build_parser():
     s.add_argument("-n", "--lines", type=int, default=40)
     s.set_defaults(func=cmd_logs)
 
-    sub.add_parser("update", help="reinstall deps + re-render config").set_defaults(func=cmd_update)
+    s = sub.add_parser("update", help="git pull + reinstall deps + re-render config")
+    s.add_argument("--check", action="store_true", help="only report whether updates are available")
+    s.add_argument("--force", action="store_true", help="reinstall even if already up to date")
+    s.set_defaults(func=cmd_update)
+
+    s = sub.add_parser("autostart", help="run The AI OS on login/boot")
+    s.add_argument("action", nargs="?", choices=["enable", "disable", "status"], default="status")
+    s.set_defaults(func=cmd_autostart)
+
     sub.add_parser("url", help="print dashboard URLs").set_defaults(func=cmd_url)
     sub.add_parser("wire", help="(re)install the openclaw-os plugin into openclaw").set_defaults(func=cmd_wire)
     return p

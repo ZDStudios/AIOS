@@ -23,9 +23,61 @@ import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import sys
+
 PORT = int(os.environ.get("AIOS_HUB_PORT", "8787"))
 ROOT = Path(os.environ.get("AIOS_ROOT", Path(__file__).resolve().parent))
 DASHBOARD = Path(os.environ.get("AIOS_DASHBOARD", ROOT / "docs" / "dashboard.html"))
+ENV_FILE = ROOT / ".env"
+CONFIG_FILE = ROOT / "aios.config.yaml"
+CHANNEL_KEYS = ["TELEGRAM_BOT_TOKEN", "DISCORD_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"]
+EDITABLE_ENV = ["AIOS_LLM_PROVIDER", "AIOS_LLM_API_KEY", "AIOS_DEFAULT_MODEL",
+                "AIOS_LLM_BASE_URL", "OPENCODE_SERVER_PASSWORD"] + CHANNEL_KEYS
+
+
+def _mask(v: str) -> str:
+    if not v:
+        return ""
+    return v[:4] + "…" + v[-4:] if len(v) > 8 else "*" * len(v)
+
+
+def read_env_file() -> dict:
+    d = {}
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                d[k.strip()] = v.strip()
+    return d
+
+
+def write_env_updates(updates: dict):
+    d = read_env_file()
+    for k, v in updates.items():
+        if v is None:
+            continue
+        if isinstance(v, str) and ("…" in v or (v and set(v) == {"*"})):
+            continue  # ignore masked placeholders the UI echoed back
+        d[k] = v
+    lines = ["# The AI OS secrets — DO NOT COMMIT (edited via hub)"]
+    lines += [f"{k}={v}" for k, v in d.items()]
+    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run_aios(*a, background=False):
+    cmd = [sys.executable, str(ROOT / "aios.py"), *a]
+    # Strip inherited AIOS_LLM_*/model vars so the child setup reads .env (the
+    # file we just wrote), not the hub's own launch-time environment.
+    env = dict(os.environ)
+    for k in ("AIOS_LLM_PROVIDER", "AIOS_LLM_API_KEY", "AIOS_LLM_BASE_URL", "AIOS_DEFAULT_MODEL"):
+        env.pop(k, None)
+    if background:
+        threading.Thread(target=lambda: subprocess.run(cmd, cwd=str(ROOT), env=env,
+                         capture_output=True), daemon=True).start()
+        return {"ok": True, "started": " ".join(a)}
+    r = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True)
+    return {"ok": r.returncode == 0, "out": (r.stdout or r.stderr)[-2000:]}
 
 # Registry of everything the hub knows about.
 PEERS = {
@@ -196,6 +248,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, services_status())
         elif self.path == "/api/peers":
             self._send(200, PEERS)
+        elif self.path == "/api/config":
+            env = read_env_file()
+            self._send(200, {
+                "provider": env.get("AIOS_LLM_PROVIDER", "openrouter"),
+                "model": env.get("AIOS_DEFAULT_MODEL", ""),
+                "env": {k: _mask(env.get(k, "")) for k in EDITABLE_ENV},
+                "has_key": bool(env.get("AIOS_LLM_API_KEY")),
+                "channels": CHANNEL_KEYS,
+                "config_text": CONFIG_FILE.read_text(encoding="utf-8") if CONFIG_FILE.exists() else "",
+            })
         elif self.path == "/health":
             self._send(200, {"ok": True, "service": "aios-hub"})
         else:
@@ -213,6 +275,32 @@ class Handler(BaseHTTPRequestHandler):
             history = payload.get("history", [])
             reply = route(target, message, history)
             self._send(200, {"target": target, "reply": reply})
+        elif self.path == "/api/env":
+            write_env_updates(payload.get("updates", {}))
+            res = run_aios("setup", "--non-interactive", "--skip-tools",
+                           "--skip-install", "--skip-wire")  # re-render into agents
+            self._send(200, {"ok": res["ok"], "saved": True})
+        elif self.path == "/api/config_text":
+            try:
+                CONFIG_FILE.write_text(payload.get("text", ""), encoding="utf-8")
+                self._send(200, {"ok": True})
+            except Exception as e:
+                self._send(200, {"ok": False, "error": str(e)})
+        elif self.path == "/api/action":
+            action = payload.get("action")
+            svc = payload.get("service")
+            if action == "rerender":
+                self._send(200, run_aios("setup", "--non-interactive", "--skip-tools",
+                                         "--skip-install", "--skip-wire"))
+            elif action == "restart":
+                run_aios("stop", *( [svc] if svc else ["all"]))
+                self._send(200, run_aios("start", *([svc] if svc else ["all"]), background=True))
+            elif action == "stop":
+                self._send(200, run_aios("stop", *([svc] if svc else ["all"])))
+            elif action == "start":
+                self._send(200, run_aios("start", *([svc] if svc else ["all"]), background=True))
+            else:
+                self._send(400, {"error": "unknown action"})
         else:
             self._send(404, {"error": "not found"})
 

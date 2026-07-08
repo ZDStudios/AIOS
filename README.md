@@ -143,14 +143,21 @@ Plus two integrations that glue it together:
 
 | Command | What it does |
 |---|---|
-| `aios setup` | Install toolchains + deps, run the secrets wizard, render config, build, mount skills + OpenUI, wire the dashboard. |
-| `aios start [svc\|all]` | Start service(s) (`opencode`, `hermes`, `openclaw`, `crewai`, `hub`), wait on health checks. |
-| `aios stop [svc\|all]` | Stop service(s); kills the whole process tree — no orphans. |
+| `aios setup` | Guided install: toolchains + deps, key wizard (or `--skip-keys`), render, build, mount, wire. Offers autostart + "start now". |
+| `aios setup --skip-keys` | Skip the API-key wizard entirely — the stack still runs; add keys later in the hub **Settings** panel. |
+| `aios start [svc…\|all]` | Start service(s) (`opencode hermes openclaw crewai hub`), wait on health checks. Accepts multiple names. |
+| `aios stop [svc…\|all]` | Stop service(s); kills the whole process tree — no orphans. |
 | `aios status` | Table of each service: state, port, PID, health. |
 | `aios doctor` | Diagnose tools, config, deps and ports — with the exact fix for each. |
+| `aios update [--check]` | `git pull` + reinstall changed deps + re-render. `--check` just reports if updates exist (also auto-checked on start). |
+| `aios autostart enable\|disable` | Run The AI OS on login/boot (Startup shortcut on Windows, systemd/`.bashrc` on Linux/WSL). |
 | `aios test --smoke` | Run test suites, or drive the whole stack end-to-end. |
 | `aios logs [svc]` | Tail a service log from `.aios/logs/`. |
 | `aios url` | Print the Control Room + service URLs. |
+
+**In the Control Room** (`http://127.0.0.1:8787/`) you can chat with any agent, click into each agent's
+panel, and open **Settings** to edit your provider/key/model, channel tokens, and `aios.config.yaml` — it
+writes `.env`/config and re-renders into every agent, no terminal needed.
 
 ## ⚙️ Configuration
 

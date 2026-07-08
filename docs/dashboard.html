@@ -3,230 +3,328 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The AI OS — Control Room</title>
+<title>The AI OS — Workspace</title>
 <style>
+  /* openclaw-os–inspired design tokens (neutral surfaces + indigo accent) */
   :root{
-    --bg:#07080d;--panel:#0e1019;--panel2:#12141f;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.16);
-    --tx:#e8eaf2;--mut:#9aa0b4;--dim:#6b7189;--violet:#8b5cf6;--cyan:#06b6d4;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;
-    --grad:linear-gradient(120deg,#8b5cf6,#6366f1 45%,#06b6d4);
-    --mono:ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace;--sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --bg:#ffffff; --surface:#f6f6f6; --sunk:#f0f0f0; --sunk2:#e9e9e9;
+    --elevated:#ffffff; --border:#e2e2e2; --border-strong:#d4d4d4;
+    --text:#1a1a1a; --text2:#525252; --text3:#8a8a8a;
+    --accent:#6366f1; --accent-strong:#4f46e5; --accent-soft:#eef2ff; --accent-soft2:#e0e7ff;
+    --success:#2b8a3e; --success-bg:#ebfbee; --danger:#e03131; --danger-bg:#fff5f5;
+    --alert:#e67700; --info:#1971c2;
+    --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.06);
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --r:10px;
+  }
+  :root[data-theme="dark"]{
+    --bg:#141414; --surface:#1a1a1a; --sunk:#0f0f0f; --sunk2:#181818;
+    --elevated:#262626; --border:#2e2e2e; --border-strong:#3d3d3d;
+    --text:#e6e6e6; --text2:#a3a3a3; --text3:#7a7a7a;
+    --accent:#818cf8; --accent-strong:#a5b4fc; --accent-soft:#1f1f2e; --accent-soft2:#262640;
+    --success:#69db7c; --success-bg:#152a15; --danger:#ff8787; --danger-bg:#2c1515;
+    --alert:#ffd43b; --info:#74c0fc;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
-  body{background:var(--bg);color:var(--tx);font-family:var(--sans);display:flex;flex-direction:column;overflow:hidden}
-  a{color:var(--violet);text-decoration:none}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column;overflow:hidden;font-size:14px}
+  a{color:var(--accent);text-decoration:none}
   .mono{font-family:var(--mono)}
+  button{font-family:var(--sans);cursor:pointer}
 
-  header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--line);background:rgba(10,11,17,.8);backdrop-filter:blur(10px)}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.02em}
-  .brand .logo{width:30px;height:30px;border-radius:8px;background:var(--grad);display:grid;place-items:center;font-size:16px}
-  .brand small{color:var(--mut);font-weight:500;font-size:.78rem;margin-left:4px}
-  .tabs{display:flex;gap:6px}
-  .tabs button{font-family:var(--sans);font-size:.85rem;font-weight:600;color:var(--mut);background:transparent;border:1px solid transparent;padding:7px 14px;border-radius:9px;cursor:pointer;transition:all .15s}
-  .tabs button:hover{color:var(--tx);background:rgba(255,255,255,.04)}
-  .tabs button.active{color:var(--tx);background:rgba(139,92,246,.14);border-color:rgba(139,92,246,.4)}
+  /* top bar */
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em}
+  .brand .logo{width:26px;height:26px;border-radius:7px;background:var(--accent);display:grid;place-items:center;font-size:14px;color:#fff}
+  .brand small{color:var(--text3);font-weight:500;font-size:.8rem}
+  .top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--elevated);color:var(--text2);display:grid;place-items:center;font-size:15px}
+  .icon-btn:hover{border-color:var(--border-strong);color:var(--text)}
+  .btn{border:1px solid var(--border);background:var(--elevated);color:var(--text);border-radius:8px;padding:8px 13px;font-weight:600;font-size:.85rem;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:var(--border-strong)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent-strong)}
+  .btn.danger{color:var(--danger);border-color:var(--border)}
+  .btn.sm{padding:5px 10px;font-size:.8rem}
 
   main{flex:1;display:flex;min-height:0}
-  aside{width:262px;border-right:1px solid var(--line);background:var(--panel);padding:16px;overflow-y:auto;flex-shrink:0}
-  .side-h{font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:6px 4px 12px}
-  .svc{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);margin-bottom:8px;cursor:pointer;transition:all .15s}
-  .svc:hover{border-color:var(--line2)}
-  .svc.sel{border-color:rgba(139,92,246,.6);background:rgba(139,92,246,.1)}
-  .svc .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex-shrink:0}
-  .svc.up .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
-  .svc .nm{font-weight:650;font-size:.92rem}
-  .svc .rl{color:var(--mut);font-size:.76rem}
-  .svc .meta{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:var(--dim)}
+  /* sidebar */
+  aside{width:230px;border-right:1px solid var(--border);background:var(--surface);padding:12px 10px;overflow-y:auto;flex-shrink:0}
+  .sec{font-size:.68rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin:14px 8px 6px}
+  .sec:first-child{margin-top:2px}
+  .nav{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;color:var(--text2);font-weight:550;font-size:.9rem;border:1px solid transparent;width:100%;background:none;text-align:left}
+  .nav:hover{background:var(--sunk)}
+  .nav.active{background:var(--accent-soft);color:var(--accent-strong);border-color:var(--accent-soft2)}
+  .nav .ic{width:18px;text-align:center;font-size:14px}
+  .nav .dot{width:7px;height:7px;border-radius:50%;background:var(--text3);margin-left:auto}
+  .nav.up .dot{background:var(--success)}
+  .nav.down .dot{background:var(--border-strong)}
 
-  .content{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+  .content{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;background:var(--bg)}
   .view{position:absolute;inset:0;display:none;flex-direction:column}
   .view.active{display:flex}
+  .vhead{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+  .vhead h2{font-size:1.05rem;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .vhead .sub{color:var(--text3);font-size:.85rem}
+  .vhead .right{margin-left:auto;display:flex;gap:8px}
+  .vbody{flex:1;overflow-y:auto;min-height:0}
+  .pad{padding:22px}
 
   /* chat */
-  #chat .msgs{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
-  .msg{max-width:820px;display:flex;gap:12px}
-  .msg .av{width:30px;height:30px;border-radius:8px;flex-shrink:0;display:grid;place-items:center;font-size:14px;font-weight:700}
+  .msgs{flex:1;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:780px;display:flex;gap:11px}
+  .msg .av{width:28px;height:28px;border-radius:7px;flex-shrink:0;display:grid;place-items:center;font-size:13px;background:var(--sunk);border:1px solid var(--border)}
   .msg.user{align-self:flex-end;flex-direction:row-reverse}
-  .msg.user .av{background:var(--grad);color:#fff}
-  .msg.bot .av{background:var(--panel2);border:1px solid var(--line2)}
-  .msg .bubble{padding:12px 16px;border-radius:13px;line-height:1.6;font-size:.94rem;white-space:pre-wrap;word-break:break-word}
-  .msg.user .bubble{background:rgba(139,92,246,.16);border:1px solid rgba(139,92,246,.3)}
-  .msg.bot .bubble{background:var(--panel);border:1px solid var(--line)}
-  .msg .who{font-size:.7rem;color:var(--dim);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
-  .msg .bubble code{font-family:var(--mono);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;font-size:.85em}
-  .composer{border-top:1px solid var(--line);padding:14px 18px;background:var(--panel)}
-  .targets{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  .targets button{font-family:var(--sans);font-size:.8rem;font-weight:600;color:var(--mut);background:var(--panel2);border:1px solid var(--line);padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
-  .targets button.active{color:var(--tx);border-color:rgba(139,92,246,.6);background:rgba(139,92,246,.12)}
-  .inrow{display:flex;gap:10px;align-items:flex-end}
-  textarea{flex:1;resize:none;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;color:var(--tx);font-family:var(--sans);font-size:.95rem;padding:12px 14px;max-height:160px;min-height:48px;line-height:1.5}
-  textarea:focus{outline:none;border-color:rgba(139,92,246,.6)}
-  .send{background:var(--grad);color:#fff;border:0;border-radius:12px;padding:0 22px;height:48px;font-weight:700;cursor:pointer;font-size:.95rem;transition:transform .15s}
-  .send:hover{transform:translateY(-1px)}
-  .send:disabled{opacity:.5;cursor:not-allowed}
-  .hint{color:var(--dim);font-size:.74rem;margin-top:8px}
+  .msg.user .av{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .msg .who{font-size:.7rem;color:var(--text3);margin-bottom:3px;font-weight:600}
+  .msg .bubble{padding:10px 14px;border-radius:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word;background:var(--surface);border:1px solid var(--border)}
+  .msg.user .bubble{background:var(--accent-soft);border-color:var(--accent-soft2)}
+  .msg .bubble code{font-family:var(--mono);background:var(--sunk2);padding:1px 5px;border-radius:4px;font-size:.86em}
+  .composer{border-top:1px solid var(--border);padding:12px 16px;background:var(--surface);flex-shrink:0}
+  .targets{display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap}
+  .chip{font-size:.8rem;font-weight:600;color:var(--text2);background:var(--elevated);border:1px solid var(--border);padding:5px 11px;border-radius:7px;display:flex;align-items:center;gap:5px}
+  .chip.active{color:var(--accent-strong);border-color:var(--accent);background:var(--accent-soft)}
+  .inrow{display:flex;gap:9px;align-items:flex-end}
+  textarea,input,select{font-family:var(--sans);font-size:.9rem;color:var(--text);background:var(--elevated);border:1px solid var(--border-strong);border-radius:9px;padding:10px 12px}
+  textarea:focus,input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .inrow textarea{flex:1;resize:none;max-height:150px;min-height:44px;line-height:1.5}
+  .send{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:0 20px;height:44px;font-weight:650}
+  .send:hover{background:var(--accent-strong)}
+  .send:disabled{opacity:.5}
 
-  /* embed / status */
-  .embed{flex:1;position:relative;background:#000}
-  .embed iframe{width:100%;height:100%;border:0}
-  .embed .fallback{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);padding:30px}
-  #status .wrap{padding:26px;overflow-y:auto}
-  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:8px}
-  .stat{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--panel)}
-  .stat .t{display:flex;align-items:center;gap:9px;font-weight:700}
-  .stat .u{font-family:var(--mono);font-size:.78rem;color:var(--cyan);margin-top:8px;word-break:break-all}
-  .badge{font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:999px;margin-left:auto}
-  .badge.up{background:rgba(34,197,94,.16);color:#4ade80}
-  .badge.down{background:rgba(239,68,68,.16);color:#f87171}
-  .spin{width:14px;height:14px;border:2px solid var(--line2);border-top-color:var(--violet);border-radius:50%;animation:s .7s linear infinite;display:inline-block}
+  /* embeds */
+  .embed{flex:1;position:relative;background:var(--sunk)}
+  .embed iframe{width:100%;height:100%;border:0;background:#fff}
+
+  /* cards / agent panels / settings */
+  .card{background:var(--elevated);border:1px solid var(--border);border-radius:var(--r);padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+  .card h3{font-size:.98rem;font-weight:700;display:flex;align-items:center;gap:9px}
+  .card p{color:var(--text2);font-size:.9rem;margin-top:6px;line-height:1.55}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  .kv{display:flex;gap:8px;align-items:center;color:var(--text3);font-size:.8rem;font-family:var(--mono)}
+  .badge{font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:999px}
+  .badge.up{background:var(--success-bg);color:var(--success)}
+  .badge.down{background:var(--sunk);color:var(--text3)}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:.82rem;font-weight:600;margin-bottom:6px;color:var(--text2)}
+  .field input,.field select,.field textarea{width:100%}
+  .field .hint{color:var(--text3);font-size:.76rem;margin-top:5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:9px;font-size:.86rem;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1}
+  .spin{width:13px;height:13px;border:2px solid var(--border-strong);border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite;display:inline-block}
   @keyframes s{to{transform:rotate(360deg)}}
-  @media(max-width:760px){aside{display:none}}
+  @media(max-width:760px){aside{position:absolute;z-index:20;height:100%;box-shadow:var(--shadow);transform:translateX(-100%);transition:transform .2s}aside.open{transform:none}}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><span class="logo">🧠</span> The AI OS <small>Control Room</small></div>
-  <div class="tabs">
-    <button class="active" data-view="chat" onclick="show('chat')">💬 Chat</button>
-    <button data-view="hermes" onclick="show('hermes')">☤ hermes</button>
-    <button data-view="openclawos" onclick="show('openclawos')">🪟 openclaw-os</button>
-    <button data-view="status" onclick="show('status')">📊 Status</button>
+  <button class="icon-btn" id="menuBtn" style="display:none" onclick="document.querySelector('aside').classList.toggle('open')">☰</button>
+  <div class="brand"><span class="logo">◆</span> The AI OS <small>Workspace</small></div>
+  <div class="top-actions">
+    <button class="btn sm" onclick="act('restart')">↻ Restart all</button>
+    <button class="icon-btn" id="themeBtn" title="Toggle theme" onclick="toggleTheme()">◐</button>
   </div>
 </header>
 
 <main>
   <aside>
-    <div class="side-h">Agents</div>
-    <div id="svclist"></div>
-    <div class="side-h" style="margin-top:20px">Talk to</div>
-    <div style="color:var(--mut);font-size:.8rem;line-height:1.5;padding:0 4px">
-      Pick a target below the chat box. <b>All</b> broadcasts to every agent. Agents can reach
-      each other through the hub.
-    </div>
+    <div class="sec">Workspace</div>
+    <button class="nav active" data-v="chat" onclick="nav('chat')"><span class="ic">💬</span> Chat</button>
+    <button class="nav" data-v="status" onclick="nav('status')"><span class="ic">📊</span> Status</button>
+
+    <div class="sec">Agents</div>
+    <button class="nav" data-v="opencode" data-svc="opencode" onclick="nav('opencode')"><span class="ic">⌨️</span> opencode <span class="dot"></span></button>
+    <button class="nav" data-v="hermes" data-svc="hermes" onclick="nav('hermes')"><span class="ic">☤</span> hermes <span class="dot"></span></button>
+    <button class="nav" data-v="openclaw" data-svc="openclaw" onclick="nav('openclaw')"><span class="ic">🦞</span> openclaw <span class="dot"></span></button>
+    <button class="nav" data-v="crewai" data-svc="crewai" onclick="nav('crewai')"><span class="ic">👥</span> CrewAI <span class="dot"></span></button>
+
+    <div class="sec">Dashboards</div>
+    <button class="nav" data-v="openclawos" data-svc="openclaw-os" onclick="nav('openclawos')"><span class="ic">🪟</span> openclaw-os <span class="dot"></span></button>
+
+    <div class="sec">System</div>
+    <button class="nav" data-v="settings" onclick="nav('settings')"><span class="ic">⚙️</span> Settings</button>
   </aside>
 
   <div class="content">
     <!-- CHAT -->
     <div id="chat" class="view active">
       <div class="msgs" id="msgs">
-        <div class="msg bot"><div class="av">🧠</div><div><div class="who">AIOS Brain</div>
-          <div class="bubble">Welcome to <b>The AI OS Control Room</b>. Ask me anything, or pick a target below — <b>Brain</b> (orchestrator), <b>CrewAI</b> (multi-agent crews), <b>opencode</b> (coding), or <b>All</b> to broadcast. The agents can call each other through the hub.</div></div></div>
+        <div class="msg"><div class="av">◆</div><div><div class="who">AIOS Brain</div>
+          <div class="bubble">Welcome to your <b>AI OS workspace</b>. Ask anything, or pick a target below — <b>Brain</b> (orchestrator), <b>CrewAI</b> (crews), <b>opencode</b> (coding), or <b>All</b>. Open any agent in the sidebar to use its own panel, or head to <b>Settings</b> to configure everything.</div></div></div>
       </div>
       <div class="composer">
         <div class="targets" id="targets">
-          <button class="active" data-t="brain">🧠 Brain</button>
-          <button data-t="crewai">👥 CrewAI</button>
-          <button data-t="opencode">⌨️ opencode</button>
-          <button data-t="all">🌐 All</button>
+          <button class="chip active" data-t="brain">◆ Brain</button>
+          <button class="chip" data-t="crewai">👥 CrewAI</button>
+          <button class="chip" data-t="opencode">⌨️ opencode</button>
+          <button class="chip" data-t="all">🌐 All</button>
         </div>
         <div class="inrow">
-          <textarea id="input" placeholder="Message The AI OS…  (Enter to send, Shift+Enter for newline)"></textarea>
+          <textarea id="input" placeholder="Message The AI OS…  (Enter to send)"></textarea>
           <button class="send" id="send" onclick="send()">Send</button>
         </div>
-        <div class="hint" id="hint">Target: <b id="curT">brain</b> · hub at <span class="mono" id="huburl">/</span></div>
       </div>
     </div>
 
-    <!-- HERMES -->
-    <div id="hermes" class="view"><div class="embed">
-      <iframe id="hermesFrame" title="hermes"></iframe>
-      <div class="fallback" id="hermesFb" style="display:none">hermes dashboard can't be embedded. <a id="hermesLink" target="_blank">Open it in a new tab →</a></div>
-    </div></div>
+    <!-- IFRAME AGENTS -->
+    <div id="hermes" class="view"><div class="vhead"><h2>☤ hermes</h2><span class="sub">autonomous agent · dashboard</span><div class="right"><button class="btn sm" onclick="act('restart','hermes')">↻ Restart</button><a class="btn sm" id="hermesNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="hermesFrame"></iframe></div></div>
+    <div id="openclawos" class="view"><div class="vhead"><h2>🪟 openclaw-os</h2><span class="sub">openclaw's generative-UI dashboard</span><div class="right"><a class="btn sm" id="osNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="osFrame"></iframe></div></div>
 
-    <!-- OPENCLAW-OS -->
-    <div id="openclawos" class="view"><div class="embed">
-      <iframe id="osFrame" title="openclaw-os"></iframe>
-      <div class="fallback" id="osFb" style="display:none">openclaw-os dashboard can't be embedded. <a id="osLink" target="_blank">Open it in a new tab →</a></div>
-    </div></div>
+    <!-- INFO AGENTS (opencode / openclaw / crewai) -->
+    <div id="opencode" class="view"><div class="vhead"><h2>⌨️ opencode</h2><span class="sub">coding-agent engine</span></div><div class="vbody pad" id="opencodeBody"></div></div>
+    <div id="openclaw" class="view"><div class="vhead"><h2>🦞 openclaw</h2><span class="sub">channel gateway + plugin host</span></div><div class="vbody pad" id="openclawBody"></div></div>
+    <div id="crewai" class="view"><div class="vhead"><h2>👥 CrewAI</h2><span class="sub">multi-agent crews</span></div><div class="vbody pad" id="crewaiBody"></div></div>
+
+    <!-- SETTINGS -->
+    <div id="settings" class="view">
+      <div class="vhead"><h2>⚙️ Settings</h2><span class="sub">edit once — applies to every agent</span></div>
+      <div class="vbody pad" style="max-width:760px">
+        <div class="card">
+          <h3>🔑 Model provider</h3>
+          <p>One key powers all five agents. Saving re-renders it into each project's config.</p>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field"><label>Provider</label>
+              <select id="sProvider"><option>openrouter</option><option>anthropic</option><option>openai</option><option>gemini</option></select></div>
+            <div class="field"><label>Default model</label><input id="sModel" placeholder="anthropic/claude-opus-4.6"></div>
+          </div>
+          <div class="field"><label>API key</label><input id="sKey" type="password" placeholder="paste your key"><div class="hint" id="keyHint"></div></div>
+          <div class="row"><button class="btn primary" onclick="saveModel()">Save & apply</button><span id="modelMsg" class="kv"></span></div>
+        </div>
+
+        <div class="card">
+          <h3>📣 Channels <span class="badge down" style="font-weight:600">optional</span></h3>
+          <p>Tokens for openclaw messaging channels. Leave blank to skip.</p>
+          <div id="channelFields" style="margin-top:14px"></div>
+          <div class="row"><button class="btn" onclick="saveChannels()">Save channels</button></div>
+        </div>
+
+        <div class="card">
+          <h3>🧩 Advanced — aios.config.yaml</h3>
+          <p>Ports, enabled services, health URLs. Edit and save, then restart.</p>
+          <div class="field" style="margin-top:12px"><textarea id="sConfig" rows="12" class="mono" style="width:100%;font-size:.82rem"></textarea></div>
+          <div class="row"><button class="btn" onclick="saveConfig()">Save config</button><button class="btn danger" onclick="act('restart')">↻ Restart all to apply</button></div>
+        </div>
+      </div>
+    </div>
 
     <!-- STATUS -->
-    <div id="status" class="view"><div class="wrap">
-      <h2 style="font-weight:800;letter-spacing:-.02em">System status</h2>
-      <p style="color:var(--mut);margin-top:6px">Live health of every service in The AI OS.</p>
-      <div class="stat-grid" id="statgrid"></div>
-    </div></div>
+    <div id="status" class="view">
+      <div class="vhead"><h2>📊 Status</h2><span class="sub">live health of every service</span><div class="right"><button class="btn sm" onclick="act('start')">▶ Start all</button><button class="btn sm danger" onclick="act('stop')">■ Stop all</button></div></div>
+      <div class="vbody pad"><div class="stat-grid" id="statgrid"></div></div>
+    </div>
   </div>
 </main>
+<div class="toast" id="toast"></div>
 
 <script>
-  const ROLES={
-    "opencode":"coding engine","hermes":"autonomous agent","openclaw":"channel gateway",
-    "crewai":"multi-agent crews","openclaw-os":"dashboard","hub":"brain + interconnect"
-  };
-  const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥","openclaw-os":"🪟",hub:"🧠"};
-  let target="brain", peers={}, history=[];
+  const ROLES={opencode:"coding engine",hermes:"autonomous agent",openclaw:"channel gateway",crewai:"multi-agent crews","openclaw-os":"dashboard",hub:"brain + interconnect"};
+  const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥","openclaw-os":"🪟",hub:"◆"};
+  let target="brain", peers={}, svc={}, history=[];
 
-  function show(v){
+  // theme
+  const rootEl=document.documentElement;
+  function applyTheme(t){rootEl.setAttribute('data-theme',t);localStorage.aiosTheme=t;}
+  function toggleTheme(){applyTheme(rootEl.getAttribute('data-theme')==='dark'?'light':'dark');}
+  applyTheme(localStorage.aiosTheme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+
+  function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+  function nav(v){
     document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v));
-    document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
-    if(v==='hermes')loadFrame('hermesFrame','hermesFb','hermesLink',peers.hermes);
-    if(v==='openclawos')loadFrame('osFrame','osFb','osLink',peers['openclaw-os']);
+    document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.v===v));
+    document.querySelector('aside').classList.remove('open');
+    if(v==='hermes')frame('hermesFrame','hermesNew',peers.hermes);
+    if(v==='openclawos')frame('osFrame','osNew',peers['openclaw-os']);
+    if(v==='opencode')agentPanel('opencode','opencodeBody','The headless coding-agent engine. Chat with it from the Chat tab (target “opencode”) or call its HTTP API/SDK.',peers.opencode);
+    if(v==='openclaw')agentPanel('openclaw','openclawBody','Multi-channel gateway + plugin host. Its rich dashboard is <b>openclaw-os</b> (open that tab). The raw control panel can’t be embedded (it blocks framing), so open it in a new tab.',peers.openclaw,true);
+    if(v==='crewai')agentPanel('crewai','crewaiBody','Role-based multi-agent crews. Chat with it from the Chat tab (target “CrewAI”). It can call the other agents via the hub.',peers.crewai);
+    if(v==='settings')loadSettings();
   }
-  function loadFrame(fid,fbid,linkid,url){
-    if(!url)return;const f=document.getElementById(fid);
-    document.getElementById(linkid).href=url;
-    if(f.dataset.loaded)return;f.src=url;f.dataset.loaded='1';
-    setTimeout(()=>{try{if(!f.contentWindow||!f.contentDocument&&f.contentWindow.length===0){}}catch(e){document.getElementById(fbid).style.display='grid';}},2500);
+  function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
+  function agentPanel(key,bodyId,desc,url,external){
+    const up=(svc[key]||{}).up;
+    document.getElementById(bodyId).innerHTML=`
+      <div class="card">
+        <h3>${ICON[key]} ${key} <span class="badge ${up?'up':'down'}">${up?'running':'stopped'}</span></h3>
+        <p>${desc}</p>
+        <div class="kv" style="margin-top:12px">${url||''}</div>
+        <div class="row">
+          <button class="btn sm" onclick="act('restart','${key}')">↻ Restart</button>
+          <button class="btn sm" onclick="act('start','${key}')">▶ Start</button>
+          <button class="btn sm danger" onclick="act('stop','${key}')">■ Stop</button>
+          ${external?`<a class="btn sm" href="${url}" target="_blank">Open control panel ↗</a>`:''}
+          <button class="btn sm" onclick="nav('settings')">⚙️ Configure in Settings</button>
+        </div>
+      </div>`;
   }
 
-  document.getElementById('targets').addEventListener('click',e=>{
-    const b=e.target.closest('button');if(!b)return;
-    target=b.dataset.t;document.getElementById('curT').textContent=target;
-    document.querySelectorAll('#targets button').forEach(x=>x.classList.toggle('active',x===b));
-  });
-
+  // chat
+  document.getElementById('targets').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;target=b.dataset.t;document.querySelectorAll('#targets .chip').forEach(x=>x.classList.toggle('active',x===b));});
   const input=document.getElementById('input');
   input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
-  input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,160)+'px';});
-
-  function addMsg(who,text,cls,icon){
-    const m=document.createElement('div');m.className='msg '+cls;
-    m.innerHTML=`<div class="av">${icon}</div><div><div class="who">${who}</div><div class="bubble"></div></div>`;
-    m.querySelector('.bubble').textContent=text;
-    const box=document.getElementById('msgs');box.appendChild(m);box.scrollTop=box.scrollHeight;return m;
-  }
+  input.addEventListener('input',()=>{input.style.height='44px';input.style.height=Math.min(input.scrollHeight,150)+'px';});
+  function addMsg(who,text,user,icon){const m=document.createElement('div');m.className='msg'+(user?' user':'');m.innerHTML=`<div class="av">${icon}</div><div><div class="who">${who}</div><div class="bubble"></div></div>`;m.querySelector('.bubble').textContent=text;const b=document.getElementById('msgs');b.appendChild(m);b.scrollTop=b.scrollHeight;return m;}
   async function send(){
-    const text=input.value.trim();if(!text)return;
-    input.value='';input.style.height='48px';
-    addMsg('you',text,'user','🧑');
-    const icon=ICON[target]||'🧠';
-    const holder=addMsg(target,'',' bot','<span class="spin"></span>');
+    const text=input.value.trim();if(!text)return;input.value='';input.style.height='44px';
+    addMsg('you',text,true,'🧑');
+    const h=addMsg(target,'',false,'<span class="spin"></span>');
     document.getElementById('send').disabled=true;
-    try{
-      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({target,message:text,history})});
-      const d=await r.json();
-      holder.querySelector('.av').textContent=icon;
-      holder.querySelector('.bubble').textContent=d.reply||'(no reply)';
-      history.push({role:'user',content:text});history.push({role:'assistant',content:(d.reply||'').slice(0,4000)});
-      if(history.length>12)history=history.slice(-12);
-    }catch(e){
-      holder.querySelector('.av').textContent='⚠️';
-      holder.querySelector('.bubble').textContent='Hub unreachable: '+e;
-    }
+    try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,message:text,history})});
+      const d=await r.json();h.querySelector('.av').textContent=ICON[target]||'◆';h.querySelector('.bubble').textContent=d.reply||'(no reply)';
+      history.push({role:'user',content:text});history.push({role:'assistant',content:(d.reply||'').slice(0,4000)});if(history.length>12)history=history.slice(-12);
+    }catch(e){h.querySelector('.av').textContent='⚠️';h.querySelector('.bubble').textContent='Hub unreachable: '+e;}
     document.getElementById('send').disabled=false;
-    document.getElementById('msgs').scrollTop=1e9;
   }
 
+  // settings
+  async function loadSettings(){
+    try{const c=await(await fetch('/api/config')).json();
+      document.getElementById('sProvider').value=c.provider||'openrouter';
+      document.getElementById('sModel').value=c.model||'';
+      document.getElementById('sKey').placeholder=c.has_key?('current: '+(c.env.AIOS_LLM_API_KEY||'set')):'paste your key';
+      document.getElementById('keyHint').textContent=c.has_key?'A key is set. Type a new one to replace it.':'No key yet — agents need one to answer.';
+      document.getElementById('sConfig').value=c.config_text||'';
+      document.getElementById('channelFields').innerHTML=(c.channels||[]).map(ck=>`<div class="field"><label>${ck}</label><input data-ck="${ck}" placeholder="${c.env[ck]||'—'}"></div>`).join('');
+    }catch(e){toast('Could not load settings');}
+  }
+  async function saveModel(){
+    const updates={AIOS_LLM_PROVIDER:document.getElementById('sProvider').value,AIOS_DEFAULT_MODEL:document.getElementById('sModel').value};
+    const k=document.getElementById('sKey').value.trim();if(k)updates.AIOS_LLM_API_KEY=k;
+    document.getElementById('modelMsg').innerHTML='<span class="spin"></span> saving…';
+    await fetch('/api/env',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
+    document.getElementById('modelMsg').textContent='saved — restart agents to apply';document.getElementById('sKey').value='';toast('Model settings saved');loadSettings();
+  }
+  async function saveChannels(){
+    const updates={};document.querySelectorAll('#channelFields input').forEach(i=>{if(i.value.trim())updates[i.dataset.ck]=i.value.trim();});
+    if(!Object.keys(updates).length){toast('Nothing to save');return;}
+    await fetch('/api/env',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});toast('Channels saved');loadSettings();
+  }
+  async function saveConfig(){
+    await fetch('/api/config_text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:document.getElementById('sConfig').value})});toast('Config saved — restart to apply');
+  }
+  async function act(action,service){
+    toast((service||'all')+': '+action+'…');
+    await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,service})});
+    setTimeout(refresh,1500);
+  }
+
+  // status polling
   async function refresh(){
-    try{
-      const s=await (await fetch('/api/services')).json();
-      peers=Object.fromEntries(Object.entries(s).map(([k,v])=>[k,v.url]));
-      // sidebar
+    try{const s=await(await fetch('/api/services')).json();svc=s;peers=Object.fromEntries(Object.entries(s).map(([k,v])=>[k,v.url]));
+      document.querySelectorAll('.nav[data-svc]').forEach(n=>{const k=n.dataset.svc;n.classList.toggle('up',!!(s[k]&&s[k].up));n.classList.toggle('down',!(s[k]&&s[k].up));});
       const order=["hub","opencode","hermes","openclaw","crewai","openclaw-os"];
-      document.getElementById('svclist').innerHTML=order.filter(k=>s[k]).map(k=>`
-        <div class="svc ${s[k].up?'up':''}"><span class="dot"></span>
-          <div><div class="nm">${ICON[k]||''} ${k}</div><div class="rl">${ROLES[k]||''}</div></div>
-          <span class="meta">${s[k].up?'live':'down'}</span></div>`).join('');
-      // status grid
       document.getElementById('statgrid').innerHTML=order.filter(k=>s[k]).map(k=>`
-        <div class="stat"><div class="t">${ICON[k]||''} ${k}
-          <span class="badge ${s[k].up?'up':'down'}">${s[k].up?'UP':'DOWN'}</span></div>
-          <div class="u">${s[k].url}</div></div>`).join('');
-      document.getElementById('huburl').textContent=(s.hub&&s.hub.url)||'/';
+        <div class="card" style="margin:0"><h3>${ICON[k]||''} ${k} <span class="badge ${s[k].up?'up':'down'}" style="margin-left:auto">${s[k].up?'UP':'DOWN'}</span></h3>
+        <p style="font-size:.82rem">${ROLES[k]||''}</p><div class="kv" style="margin-top:10px">${s[k].url}</div>
+        <div class="row">${k!=='hub'&&k!=='openclaw-os'?`<button class="btn sm" onclick="act('restart','${k}')">↻</button><button class="btn sm danger" onclick="act('stop','${k}')">■</button>`:''}</div></div>`).join('');
     }catch(e){}
   }
   refresh();setInterval(refresh,5000);
+  if(innerWidth<=760)document.getElementById('menuBtn').style.display='grid';
 </script>
 </body>
 </html>
