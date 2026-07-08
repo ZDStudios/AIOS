@@ -258,6 +258,8 @@ PROJECTS = {
     "opencode": resolve_root("opencode-dev/opencode-dev", "opencode-dev", "opencode"),
     "hermes": resolve_root("hermes-agent-main/hermes-agent-main", "hermes-agent-main", "hermes-agent"),
     "openclaw": resolve_root("openclaw-main/openclaw-main", "openclaw-main", "openclaw"),
+    "crewai": resolve_root("crewAI-main/crewAI-main", "crewAI-main", "crewai"),
+    # openclaw-os is the dashboard for openclaw (not a standalone agent).
     "openclaw_os": resolve_root("openclaw-os-main/openclaw-os-main", "openclaw-os-main", "openclaw-os"),
     "lifeos": resolve_root("LifeOS-main/LifeOS-main", "LifeOS-main", "LifeOS"),
 }
@@ -394,10 +396,37 @@ def service_specs(cfg: dict) -> dict:
             # user's own ~/.openclaw (which may hold unrelated prior setup).
             "env": openclaw_env(),
         }
+    cr = PROJECTS["crewai"]
+    if cr:
+        port = int(cfg_get(cfg, "services.crewai.port", 4788))
+        specs["crewai"] = {
+            "enabled": cfg_get(cfg, "services.crewai.enabled", True),
+            "cwd": ROOT,
+            "cmd": ["uv", "run", "--project", str(cr), "python", str(ROOT / "services" / "crewai_service.py")],
+            "port": port,
+            "health": cfg_get(cfg, "health.crewai", f"http://127.0.0.1:{port}/health"),
+            "tool": "uv",
+            "env": {"AIOS_CREWAI_PORT": str(port)},
+        }
+    # The AIOS Hub — unified dashboard + interconnect. Always available (stdlib).
+    hport = int(cfg_get(cfg, "services.hub.port", 8787))
+    specs["hub"] = {
+        "enabled": cfg_get(cfg, "services.hub.enabled", True),
+        "cwd": ROOT,
+        "cmd": [sys.executable, str(ROOT / "aios_hub.py")],
+        "port": hport,
+        "health": cfg_get(cfg, "health.hub", f"http://127.0.0.1:{hport}/health"),
+        "tool": "python",
+        "env": {
+            "AIOS_HUB_PORT": str(hport),
+            "AIOS_OPENCODE_DIR": str(oc / "packages" / "opencode") if oc else "",
+            "AIOS_BUN": find_tool("bun") or "",
+        },
+    }
     return specs
 
 
-START_ORDER = ["opencode", "hermes", "hermes-gateway", "openclaw"]
+START_ORDER = ["opencode", "hermes", "hermes-gateway", "openclaw", "crewai", "hub"]
 
 
 def openclaw_env() -> dict:
@@ -405,6 +434,27 @@ def openclaw_env() -> dict:
     d = STATE / "openclaw"
     d.mkdir(parents=True, exist_ok=True)
     return {"OPENCLAW_STATE_DIR": str(d)}
+
+
+def interconnect_env(cfg: dict) -> dict:
+    """Peer + hub URLs injected into every service so agents can reach each other."""
+    ocp = cfg_get(cfg, "services.opencode.port", 4096)
+    hmp = cfg_get(cfg, "services.hermes.port", 9119)
+    clp = cfg_get(cfg, "services.openclaw.port", 18789)
+    crp = cfg_get(cfg, "services.crewai.port", 4788)
+    hbp = cfg_get(cfg, "services.hub.port", 8787)
+    return {
+        "AIOS_ROOT": str(ROOT),
+        "AIOS_DASHBOARD": str(ROOT / "docs" / "dashboard.html"),
+        "AIOS_HUB_URL": f"http://127.0.0.1:{hbp}",
+        "AIOS_HUB_PORT": str(hbp),
+        "AIOS_OPENCODE_URL": f"http://127.0.0.1:{ocp}",
+        "AIOS_HERMES_URL": f"http://127.0.0.1:{hmp}",
+        "AIOS_OPENCLAW_URL": f"http://127.0.0.1:{clp}",
+        "AIOS_CREWAI_URL": f"http://127.0.0.1:{crp}",
+        "AIOS_CREWAI_PORT": str(crp),
+        "AIOS_OPENCLAWOS_URL": f"http://127.0.0.1:{clp}/plugins/openclawos/",
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -451,6 +501,12 @@ def spawn(svc: str, spec: dict, cfg: dict, secrets: dict, extra_env: dict | None
     logf.flush()
 
     penv, _, _ = provider_env(cfg, secrets)
+    penv.update(interconnect_env(cfg))  # peer + hub URLs (agents reach each other)
+    # Raw AIOS_LLM_* passthrough so the hub + CrewAI can call the model directly.
+    for k in ("AIOS_LLM_PROVIDER", "AIOS_LLM_API_KEY", "AIOS_LLM_BASE_URL", "AIOS_DEFAULT_MODEL"):
+        if secrets.get(k):
+            penv[k] = secrets[k]
+    penv.setdefault("AIOS_DEFAULT_MODEL", cfg_get(cfg, "model.default", "anthropic/claude-opus-4.6"))
     if spec.get("env"):
         penv.update(spec["env"])
     if extra_env:
@@ -564,6 +620,7 @@ def cmd_doctor(args):
         "openclaw": (PROJECTS["openclaw"], "node_modules"),
         "openclaw_os": (PROJECTS["openclaw_os"], "node_modules"),
         "hermes": (PROJECTS["hermes"], ".venv"),
+        "crewai": (PROJECTS["crewai"], ".venv"),
     }
     for name, (base, marker) in checks.items():
         if base and (base / marker).exists():
@@ -637,6 +694,10 @@ def cmd_setup(args):
     # 6) mount LifeOS skills
     if cfg_get(cfg, "lifeos.mount_skills", True):
         mount_lifeos(cfg)
+
+    # 6b) mount OpenUI (generative UI) context into the agents
+    if cfg_get(cfg, "openui.mount_context", True):
+        mount_openui(cfg)
 
     # 7) wire openclaw-os plugin (best-effort; needs openclaw runnable)
     if cfg_get(cfg, "services.openclaw_os.enabled", True) and not args.skip_wire:
@@ -758,6 +819,8 @@ def _install_all(cfg):
         # on Windows; the core gateway + openclaw-os dashboard run from source.
         ("openclaw", PROJECTS["openclaw"], "pnpm", ["install", "--ignore-scripts"]),
         ("openclaw_os", PROJECTS["openclaw_os"], "pnpm", ["install"]),
+        # crewai: sync only the crewai package's env (avoids heavy optional extras).
+        ("crewai", PROJECTS["crewai"], "uv", ["sync", "--package", "crewai"]),
     ]
     env = child_env()
     for name, base, tool, sub in jobs:
@@ -936,6 +999,29 @@ def mount_lifeos(cfg: dict):
         except Exception as e:
             warn(f"could not mount to {t}: {e}")
     say(f"{C.GRY}Source: {src}{C.R}")
+
+
+def mount_openui(cfg: dict):
+    """Mount OpenUI (generative-UI) context into every agent's skill dir so any
+    agent can respond with OpenUI Lang that the openclaw-os dashboard renders."""
+    head("Mounting OpenUI context")
+    src = ROOT / "docs" / "aios" / "openui-context.md"
+    if not src.exists():
+        warn("openui-context.md not found; skipping")
+        return
+    targets = [
+        Path.home() / ".openclaw" / "skills" / "openui",
+        Path.home() / ".hermes" / "skills" / "openui",
+        STATE / "skills" / "openui",
+    ]
+    for t in targets:
+        try:
+            t.mkdir(parents=True, exist_ok=True)
+            shutil.copy(src, t / "OPENUI.md")
+            ok(f"mounted → {t / 'OPENUI.md'}")
+        except Exception as e:
+            warn(f"could not mount to {t}: {e}")
+    say(f"{C.GRY}OpenUI: https://www.openui.com — openclaw-os renders OpenUI Lang natively{C.R}")
 
 
 def _stage_openclaw_os_plugin() -> Path | None:
@@ -1218,16 +1304,19 @@ def _openclaw_os_url(cfg) -> str | None:
 
 
 def _print_urls(cfg):
-    say(f"{C.B}Front door (dashboard){C.R}")
+    hbp = int(cfg_get(cfg, "services.hub.port", 8787))
+    say(f"{C.B}★ Control Room — talk to everything{C.R}")
+    say(f"  {C.CYN}http://127.0.0.1:{hbp}/{C.R}   (the AIOS Hub dashboard)")
+    say(f"\n{C.B}Individual surfaces{C.R}")
     osurl = _openclaw_os_url(cfg)
     if osurl:
-        say(f"  openclaw-os : {C.CYN}{osurl}{C.R}")
-        say(f"  {C.GRY}pre-authenticated URL: run `node openclaw.mjs os url` in {PROJECTS['openclaw']}{C.R}"
-            if PROJECTS["openclaw"] else "")
+        say(f"  openclaw-os : {C.CYN}{osurl}{C.R}  (openclaw's dashboard)")
     hport = int(cfg_get(cfg, "services.hermes.port", 9119))
     say(f"  hermes dash : {C.CYN}http://127.0.0.1:{hport}/{C.R}")
     ocport = int(cfg_get(cfg, "services.opencode.port", 4096))
     say(f"  opencode API: {C.CYN}http://127.0.0.1:{ocport}/{C.R}")
+    crp = int(cfg_get(cfg, "services.crewai.port", 4788))
+    say(f"  crewai API  : {C.CYN}http://127.0.0.1:{crp}/{C.R}")
 
 
 # --------------------------------------------------------------------------- #

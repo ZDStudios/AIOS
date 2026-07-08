@@ -1,0 +1,72 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "\nCurrent Task: Analyze
+      the benefits of remote work briefly. Keep it concise.\n\nProvide your complete
+      response:"}]}], "inferenceConfig": {"stopSequences": ["\nObservation:"]}, "system":
+      [{"text": "You are Analyst. You are an expert analyst who provides clear, structured
+      insights.\nYour personal goal is: Provide structured analysis on topics"}],
+      "toolConfig": {"tools": [{"toolSpec": {"name": "structured_output", "description":
+      "Use this tool to provide your final structured response. Call this tool when
+      you have gathered all necessary information and are ready to provide the final
+      answer in the required format.", "inputSchema": {"json": {"description": "Structured
+      output for analysis results.", "properties": {"topic": {"description": "The
+      topic analyzed", "title": "Topic", "type": "string"}, "key_points": {"description":
+      "Key insights from the analysis", "items": {"type": "string"}, "title": "Key
+      Points", "type": "array"}, "summary": {"description": "Brief summary of findings",
+      "title": "Summary", "type": "string"}}, "required": ["topic", "key_points",
+      "summary"], "title": "AnalysisResult", "type": "object", "additionalProperties":
+      false}}}}], "toolChoice": {"tool": {"name": "structured_output"}}}}'
+    headers:
+      Content-Length:
+      - '1270'
+      Content-Type:
+      - !!binary |
+        YXBwbGljYXRpb24vanNvbg==
+      User-Agent:
+      - X-USER-AGENT-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - !!binary |
+        YXR0ZW1wdD0x
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: "{\"metrics\":{\"latencyMs\":6183},\"output\":{\"message\":{\"content\":[{\"toolUse\":{\"input\":{\"topic\":\"Benefits
+        of Remote Work\",\"key_points\":[\"Improved Work-Life Balance: Employees gain
+        flexibility to manage personal and professional responsibilities, reducing
+        stress and burnout.\",\"Increased Productivity: Fewer office distractions
+        and elimination of commutes allow workers to focus more effectively on tasks.\",\"Cost
+        Savings: Both employers (reduced office overhead) and employees (lower commuting
+        and wardrobe costs) benefit financially.\",\"Access to Global Talent: Companies
+        can hire the best candidates regardless of geographic location, expanding
+        the talent pool.\",\"Environmental Impact: Reduced commuting leads to lower
+        carbon emissions and a smaller environmental footprint.\",\"Employee Retention
+        & Satisfaction: Greater autonomy and flexibility contribute to higher job
+        satisfaction and lower turnover rates.\"],\"summary\":\"Remote work offers
+        a compelling mix of personal, financial, and organizational advantages. It
+        empowers employees with flexibility and autonomy while enabling businesses
+        to cut costs, access wider talent pools, and boost overall productivity \u2014
+        making it a mutually beneficial arrangement in the modern workforce.\"},\"name\":\"structured_output\",\"toolUseId\":\"tooluse_miAVY9Wyw0HMShZbgbyTwX\",\"type\":\"tool_use\"}}],\"role\":\"assistant\"}},\"stopReason\":\"tool_use\",\"usage\":{\"cacheReadInputTokenCount\":0,\"cacheReadInputTokens\":0,\"cacheWriteInputTokenCount\":0,\"cacheWriteInputTokens\":0,\"inputTokens\":851,\"outputTokens\":268,\"serverToolUsage\":{},\"totalTokens\":1119}}"
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1568'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:05:01 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+version: 1

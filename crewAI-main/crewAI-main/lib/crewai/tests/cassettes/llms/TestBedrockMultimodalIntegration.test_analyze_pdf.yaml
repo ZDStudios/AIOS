@@ -1,0 +1,45 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "What type of document
+      is this? Answer in one word."}, {"document": {"name": "document", "format":
+      "pdf", "source": {"bytes": "JVBERi0xLjQKMSAwIG9iaiA8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4gZW5kb2JqCjIgMCBvYmogPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4gZW5kb2JqCjMgMCBvYmogPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSA+PiBlbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmCjAwMDAwMDAwMDkgMDAwMDAgbgowMDAwMDAwMDU4IDAwMDAwIG4KMDAwMDAwMDExNSAwMDAwMCBuCnRyYWlsZXIgPDwgL1NpemUgNCAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMTk2CiUlRU9GCg=="}}}]}],
+      "inferenceConfig": {}}'
+    headers:
+      Content-Length:
+      - '646'
+      Content-Type:
+      - !!binary |
+        YXBwbGljYXRpb24vanNvbg==
+      User-Agent:
+      - X-USER-AGENT-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - !!binary |
+        YXR0ZW1wdD0x
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.vcr.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: '{"metrics":{"latencyMs":2732},"output":{"message":{"content":[{"text":"Blank"}],"role":"assistant"}},"stopReason":"end_turn","usage":{"cacheReadInputTokenCount":0,"cacheReadInputTokens":0,"cacheWriteInputTokenCount":0,"cacheWriteInputTokens":0,"inputTokens":1606,"outputTokens":5,"serverToolUsage":{},"totalTokens":1611}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '321'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:34:51 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+version: 1

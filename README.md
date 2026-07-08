@@ -2,7 +2,7 @@
 
 # 🧠 The AI OS
 
-### Five open-source AI agents. One operating system.
+### Five open-source AI agents. One operating system. One Control Room.
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-8B5CF6?style=for-the-badge" alt="MIT License"></a>
@@ -16,52 +16,37 @@
   <img src="https://img.shields.io/badge/opencode-coding_engine-EC4899?style=flat-square" alt="opencode">
   <img src="https://img.shields.io/badge/hermes-autonomous_agent-F59E0B?style=flat-square" alt="hermes">
   <img src="https://img.shields.io/badge/openclaw-channel_gateway-EF4444?style=flat-square" alt="openclaw">
-  <img src="https://img.shields.io/badge/openclaw--os-dashboard-06B6D4?style=flat-square" alt="openclaw-os">
+  <img src="https://img.shields.io/badge/CrewAI-multi--agent_crews-06B6D4?style=flat-square" alt="CrewAI">
   <img src="https://img.shields.io/badge/LifeOS-shared_skills-8B5CF6?style=flat-square" alt="LifeOS">
+  <img src="https://img.shields.io/badge/+_openclaw--os-dashboard-64748B?style=flat-square" alt="openclaw-os">
+  <img src="https://img.shields.io/badge/+_OpenUI-generative_UI-10B981?style=flat-square" alt="OpenUI">
 </p>
 
-**[Quickstart](#-60-second-quickstart)** · **[Architecture](#️-architecture)** · **[Commands](#️-command-reference)** · **[Full docs](README.aios.md)** · **[Website](docs/index.html)**
+**[Install](#-install-one-line)** · **[Control Room](#-the-control-room)** · **[Architecture](#️-architecture)** · **[Commands](#️-command-reference)** · **[Full docs](README.aios.md)** · **[Website](https://zdstudios.github.io/AIOS/)**
 
 </div>
 
 ---
 
-**The AI OS** takes five independent open-source agent projects and makes them work as **one auto-configured system** you drive from a single command: **`aios`**.
+**The AI OS** takes five independent open-source AI agents and makes them work as **one auto-configured
+system** you drive from a single command — **`aios`** — and a single web **Control Room** where you can
+**talk to everything and have the agents talk to each other**.
 
-One control script. One config file. One `.env`. `aios setup` installs every toolchain, wires the projects together, and mounts your shared skills. `aios start` brings the whole stack up — with an interactive dashboard as the **front door**.
+One control script. One config. One `.env`. `aios setup` installs every toolchain, wires the projects
+together, mounts your shared skills, and adds **OpenUI** generative-UI context to every agent.
+`aios start` brings the whole stack up behind the **Control Room** dashboard.
 
-> You can't fuse three runtimes and five package managers into a single file — that would just break everything. So "one file" here means **one control surface** (`aios`) over five real, unmodified projects, not a Frankenstein merge. It installs, configures, wires, runs, tests, and debugs all of them.
+> You can't fuse three runtimes and multiple package managers into a single file — that would just break
+> everything. So "one file" here means **one control surface** (`aios`) + **one dashboard** (the Hub) over
+> five real, unmodified projects. It installs, configures, wires, runs, tests, and debugs all of them.
 
 <div align="center">
 
 ```
-aios setup   →   aios start   →   aios url
+aios setup   →   aios start   →   aios url        (opens the Control Room)
 ```
 
 </div>
-
-## ✨ What you get
-
-| | |
-|---|---|
-| **One command to rule them all** | `aios setup` installs bun / pnpm / uv / Node, installs every project's deps, builds what needs building, and wires it all together. Idempotent and safe to re-run. |
-| **One key, every agent** | Set your model provider + API key **once** in `.env`. `aios` maps it into each project's own config, so all four agents share one key. Change it in one place. |
-| **A dashboard as the front door** | The **openclaw-os** generative-UI workspace is served inside the gateway — sessions, live apps, charts, and forms in one pane of glass. |
-| **Health-checked orchestration** | `aios start` waits until every service is actually up. `aios status` shows ports, PIDs, and health. `aios stop` kills the whole tree — no orphans. |
-| **Doctor that tells you the fix** | `aios doctor` diagnoses toolchains, config, deps, and port conflicts — and prints the exact command to fix each one. |
-| **Unified testing & debugging** | `aios test` runs every project's real suite. `aios test --smoke` drives the whole stack end-to-end. `aios debug` dumps resolved config with secrets masked. |
-| **Windows-first, cross-platform** | Built and verified on Windows 11 (PowerShell), with POSIX / macOS / Linux / WSL parity. |
-| **Nothing hidden** | Zero-dependency Python control script. Every project stays intact and upgradable. Your secrets never leave `.env`. |
-
-## 🧩 The five projects
-
-| Project | Role in The AI OS | Port | Upstream |
-|---|---|---|---|
-| **opencode** | Coding-agent engine (headless server + SDK) | `4096` | [opencode.ai](https://opencode.ai) |
-| **hermes** | Autonomous agent — memory, cron, learning loop, dashboard | `9119` | [Nous Research](https://github.com/NousResearch/hermes-agent) |
-| **openclaw** | Multi-channel messaging gateway + plugin host | `18789` | [openclaw.ai](https://github.com/openclaw/openclaw) |
-| **openclaw-os** | The dashboard / front door (served inside openclaw) | `18789/plugins/openclawos/` | [thesys](https://github.com/thesysdev/openclaw-os) |
-| **LifeOS** | Shared identity + skills mounted into the agents | — | [danielmiessler/LifeOS](https://github.com/danielmiessler/LifeOS) |
 
 ## ⚡ Install (one line)
 
@@ -77,104 +62,121 @@ curl -fsSL https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.sh | ba
 irm https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.ps1 | iex
 ```
 
-The installer clones the repo to `~/AIOS`, installs the toolchains (**uv, bun, pnpm, Node**),
-and runs `aios setup` — installing every project's deps, building, and wiring the dashboard.
-Then finish setup with your key:
+The installer clones the repo to `~/AIOS`, installs the toolchains (**uv, bun, pnpm, Node**), and runs
+`aios setup` — installing every agent's deps, building, and wiring the Control Room. Then add your key:
 
 ```bash
 cd ~/AIOS
 ./aios setup --force     # enter your model provider + API key
 ./aios start             # bring the whole stack up
-./aios url               # open the dashboard
+./aios url               # open the Control Room
 ```
 
-> Override the target dir with `AIOS_DIR=/path`. Set `AIOS_NO_SETUP=1` to clone only.
+## 💬 The Control Room
 
-## 🚀 Already have the folder?
+`aios start` launches the **AIOS Hub** — a single web dashboard at **`http://127.0.0.1:8787/`** where you can:
 
-If you already downloaded The AI OS, skip the installer and run it directly:
+- **Talk to everything** — chat with the **Brain** (orchestrator), **CrewAI** (multi-agent crews),
+  **opencode** (coding), or **broadcast to all** at once.
+- **See everything live** — real-time health of every service.
+- **Use every agent's UI** — the hermes and openclaw-os dashboards are embedded as tabs.
+- **Let agents reach each other** — the Hub is the interconnect bus; each agent is given every other
+  agent's endpoint, and CrewAI ships an `ask_peer` tool to call them.
+- **Render generative UI** — replies can come back as **OpenUI** apps (charts, tables, forms) via openclaw-os.
 
-```powershell
-# Windows (PowerShell)
-.\aios.ps1 setup      # install toolchains + deps, create .env, render config, build, wire
-.\aios.ps1 start      # bring up all services
-.\aios.ps1 url        # print + open the dashboard URL
-```
+## 🧩 The five agents
 
-```bash
-# macOS / Linux / WSL / Git Bash
-./aios setup && ./aios start && ./aios url
-```
+| Agent | Role in The AI OS | Port | Upstream |
+|---|---|---|---|
+| **opencode** | Coding-agent engine (headless server + SDK) | `4096` | [opencode.ai](https://opencode.ai) |
+| **hermes** | Autonomous agent — memory, cron, learning loop, dashboard | `9119` | [Nous Research](https://github.com/NousResearch/hermes-agent) |
+| **openclaw** | Multi-channel messaging gateway + plugin host | `18789` | [openclaw.ai](https://github.com/openclaw/openclaw) |
+| **CrewAI** | Multi-agent orchestration — role-based crews | `4788` | [crewaiinc/crewai](https://github.com/crewaiinc/crewai) |
+| **LifeOS** | Shared identity + skills mounted into the agents | — | [danielmiessler/LifeOS](https://github.com/danielmiessler/LifeOS) |
 
-Something off? Run **`aios doctor`** first — it names the problem and the exact fix.
+Plus two integrations that glue it together:
+
+| | Role | Upstream |
+|---|---|---|
+| **AIOS Hub** | The Control Room — unified dashboard + interconnect (`:8787`) | *(this repo)* |
+| **openclaw-os** | openclaw's generative-UI **dashboard** (a plugin, not an agent) | [thesys](https://github.com/thesysdev/openclaw-os) |
+| **OpenUI** | Generative-UI standard, mounted into every agent | [openui.com](https://www.openui.com) |
 
 ## 🗺️ Architecture
 
 ```
-                        ┌────────────────────────────────────────┐
-                        │  openclaw-os  ·  dashboard / front door  │
-                        │  http://127.0.0.1:18789/plugins/openclawos/
-                        └────────────────────┬───────────────────┘
-                                 served as a plugin inside
-                        ┌────────────────────▼───────────────────┐
-                        │  openclaw  gateway  :18789              │  channels + plugin host
-                        └─────────────────────────────────────────┘
-        ┌────────────────────────────┐         ┌────────────────────────────┐
-        │  hermes  dashboard  :9119  │         │  opencode  server  :4096   │
-        │  autonomous · memory · cron│         │  coding engine · HTTP/SDK  │
-        └────────────────────────────┘         └────────────────────────────┘
-                        ┌─────────────────────────────────────────┐
-                        │  LifeOS — shared skills mounted in agents │
-                        └─────────────────────────────────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │   💬  AIOS Hub — the Control Room  :8787      │  talk to everything
+                    │   chat · broadcast · live status · interconnect
+                    └───────┬───────────┬───────────┬──────────┬────┘
+              ┌─────────────┘     ┌─────┘       ┌───┘      ┌───┘
+     ┌────────▼───────┐  ┌────────▼──────┐  ┌───▼──────┐  ┌▼──────────────┐
+     │ opencode :4096 │  │ hermes  :9119 │  │ openclaw │  │ CrewAI  :4788 │
+     │ coding engine  │  │ autonomous    │  │  :18789  │  │ multi-agent   │
+     └────────────────┘  └───────────────┘  └────┬─────┘  └───────────────┘
+            every agent gets every other's URL   │  hosts
+            (agents call each other via the Hub) │
+                                        ┌─────────▼──────────┐
+                                        │ openclaw-os (OpenUI) │  dashboard
+                                        └──────────────────────┘
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ LifeOS skills + OpenUI context — mounted into every agent          │
+     └──────────────────────────────────────────────────────────────────┘
 
   Single source of truth:  aios.config.yaml  +  .env   →  rendered into each project's config
   Single control surface:  ./aios <command>            →  state kept under .aios/
 ```
 
-**hermes and openclaw** both do "gateway" work, so by design they run as **separate, toggleable**
-services (9119 vs 18789) instead of being merged. Default split: openclaw = channels + dashboard,
-hermes = autonomous jobs + memory + cron, opencode = the coding engine both can call.
+## ✨ What you get
+
+| | |
+|---|---|
+| **One Control Room** | Talk to every agent — or all at once — from one dashboard, and watch them talk to each other. |
+| **One command to rule them all** | `aios setup` installs bun / pnpm / uv / Node, every agent's deps, builds what needs building, and wires it together. Idempotent. |
+| **One key, every agent** | Set your provider + API key once in `.env`; `aios` maps it into all five. |
+| **Agents that reach each other** | The Hub is a shared bus; each agent knows every peer's endpoint. CrewAI ships an `ask_peer` tool. |
+| **Generative UI everywhere** | OpenUI context is mounted into every agent; openclaw-os renders the results as live apps. |
+| **Doctor + smoke tests** | `aios doctor` prints the exact fix for any problem; `aios test --smoke` drives the whole stack. |
+| **Windows-first, cross-platform** | Built and verified on Windows 11 (PowerShell), with POSIX / macOS / Linux / WSL parity. |
 
 ## 🎛️ Command reference
 
 | Command | What it does |
 |---|---|
-| `aios setup` | Install toolchains + deps, run the secrets wizard, render config, build, mount skills, wire the dashboard. Idempotent. |
-| `aios start [svc\|all]` | Start service(s), wait on health checks, keep unified logs. |
-| `aios stop [svc\|all]` | Stop service(s); kills the whole process tree (no orphans). |
+| `aios setup` | Install toolchains + deps, run the secrets wizard, render config, build, mount skills + OpenUI, wire the dashboard. |
+| `aios start [svc\|all]` | Start service(s) (`opencode`, `hermes`, `openclaw`, `crewai`, `hub`), wait on health checks. |
+| `aios stop [svc\|all]` | Stop service(s); kills the whole process tree — no orphans. |
 | `aios status` | Table of each service: state, port, PID, health. |
-| `aios doctor` | Diagnose tools, config, deps, ports — with exact fixes. |
-| `aios test [svc\|all]` | Run each project's real test suite; aggregated summary. |
-| `aios test --smoke` | Health-based end-to-end check across the stack. |
-| `aios debug [svc]` | Dump resolved config, masked secrets, service state, logs. |
-| `aios logs [svc] -n N` | Tail a service log from `.aios/logs/`. |
-| `aios wire` | (Re)install the openclaw-os dashboard plugin into openclaw. |
-| `aios update` | Reinstall deps + re-render config after project updates. |
-| `aios url` | Print the dashboard + service URLs. |
+| `aios doctor` | Diagnose tools, config, deps and ports — with the exact fix for each. |
+| `aios test --smoke` | Run test suites, or drive the whole stack end-to-end. |
+| `aios logs [svc]` | Tail a service log from `.aios/logs/`. |
+| `aios url` | Print the Control Room + service URLs. |
 
 ## ⚙️ Configuration
 
-- **`.env`** — secrets only (`AIOS_LLM_PROVIDER`, `AIOS_LLM_API_KEY`, `AIOS_DEFAULT_MODEL`, optional channel tokens). Git-ignored automatically.
-- **`aios.config.yaml`** — non-secret wiring (enabled services, ports, model routing, health URLs). Copy from `aios.config.example.yaml`.
+- **`.env`** — secrets only (`AIOS_LLM_PROVIDER`, `AIOS_LLM_API_KEY`, `AIOS_DEFAULT_MODEL`, optional channel tokens). Git-ignored.
+- **`aios.config.yaml`** — non-secret wiring (enabled services, ports incl. `crewai: 4788` and `hub: 8787`, model routing, OpenUI/LifeOS mounting, health URLs). Copy from `aios.config.example.yaml`.
 
-Edit one key in `.env`, run `aios setup`, and every agent is reconfigured. Full reference in **[README.aios.md](README.aios.md)**.
+Edit one key in `.env`, run `aios setup`, and every agent — and the Hub, and CrewAI — is reconfigured.
+Full reference in **[README.aios.md](README.aios.md)**.
 
 ## 🙏 Built on
 
-The AI OS is an integration layer. All the heavy lifting is done by these excellent open-source
-projects — go star them:
+The AI OS is an integration layer. All the heavy lifting is done by these open-source projects — go star them:
 
 - **[opencode](https://opencode.ai)** — the open-source AI coding agent
 - **[hermes-agent](https://github.com/NousResearch/hermes-agent)** by Nous Research — the self-improving agent
 - **[openclaw](https://github.com/openclaw/openclaw)** — the personal AI assistant gateway
-- **[openclaw-os](https://github.com/thesysdev/openclaw-os)** by thesys — the generative-UI workspace
+- **[CrewAI](https://github.com/crewaiinc/crewai)** — framework for orchestrating role-playing, autonomous AI agents
 - **[LifeOS](https://github.com/danielmiessler/LifeOS)** by Daniel Miessler — the AI-powered life OS
+- **[openclaw-os](https://github.com/thesysdev/openclaw-os)** by thesys — the generative-UI dashboard
+- **[OpenUI](https://www.openui.com)** — the open standard for LLM-generated interfaces
 
 Each project keeps its own license (all MIT / open source); their `LICENSE` files ship unmodified.
 
 ## 📄 License
 
-The `aios` orchestrator and docs are released under the **MIT License**. Bundled projects retain
+The `aios` orchestrator, Hub, and docs are released under the **MIT License**. Bundled projects retain
 their own licenses. See [`LICENSE`](LICENSE).
 
 <div align="center">

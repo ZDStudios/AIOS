@@ -1,0 +1,697 @@
+import asyncio
+from collections.abc import Callable
+import json
+from unittest.mock import patch
+
+from crewai.agent import Agent
+from crewai.crew import Crew
+from crewai.task import Task
+from crewai.tools import BaseTool, tool
+from pydantic import BaseModel, Field, RootModel
+import pytest
+
+
+def test_creating_a_tool_using_annotation():
+    @tool("Name of my tool")
+    def my_tool(question: str) -> str:
+        """Clear description for what this tool is useful for, your agent will need this information to use it."""
+        return question
+
+    assert my_tool.name == "Name of my tool"
+    assert "Tool Name: name_of_my_tool" in my_tool.description
+    assert "Tool Arguments:" in my_tool.description
+    assert '"question"' in my_tool.description
+    assert '"type": "string"' in my_tool.description
+    assert "Tool Description: Clear description for what this tool is useful for" in my_tool.description
+    assert my_tool.args_schema.model_json_schema()["properties"] == {
+        "question": {"title": "Question", "type": "string"}
+    }
+    assert (
+        my_tool.func("What is the meaning of life?") == "What is the meaning of life?"
+    )
+
+    converted_tool = my_tool.to_structured_tool()
+    assert converted_tool.name == "Name of my tool"
+
+    assert "Tool Name: name_of_my_tool" in converted_tool.description
+    assert "Tool Arguments:" in converted_tool.description
+    assert '"question"' in converted_tool.description
+    assert converted_tool.args_schema.model_json_schema()["properties"] == {
+        "question": {"title": "Question", "type": "string"}
+    }
+    assert (
+        converted_tool.func("What is the meaning of life?")
+        == "What is the meaning of life?"
+    )
+
+
+def test_creating_a_tool_using_baseclass():
+    class MyCustomTool(BaseTool):
+        name: str = "Name of my tool"
+        description: str = "Clear description for what this tool is useful for, your agent will need this information to use it."
+
+        def _run(self, question: str) -> str:
+            return question
+
+    my_tool = MyCustomTool()
+    assert my_tool.name == "Name of my tool"
+
+    assert "Tool Name: name_of_my_tool" in my_tool.description
+    assert "Tool Arguments:" in my_tool.description
+    assert '"question"' in my_tool.description
+    assert '"type": "string"' in my_tool.description
+    assert "Tool Description: Clear description for what this tool is useful for" in my_tool.description
+    assert my_tool.args_schema.model_json_schema()["properties"] == {
+        "question": {"title": "Question", "type": "string"}
+    }
+    assert my_tool.run("What is the meaning of life?") == "What is the meaning of life?"
+
+    converted_tool = my_tool.to_structured_tool()
+    assert converted_tool.name == "Name of my tool"
+
+    assert "Tool Name: name_of_my_tool" in converted_tool.description
+    assert "Tool Arguments:" in converted_tool.description
+    assert '"question"' in converted_tool.description
+    assert converted_tool.args_schema.model_json_schema()["properties"] == {
+        "question": {"title": "Question", "type": "string"}
+    }
+    assert (
+        converted_tool._run("What is the meaning of life?")
+        == "What is the meaning of life?"
+    )
+
+
+def test_setting_cache_function():
+    class MyCustomTool(BaseTool):
+        name: str = "Name of my tool"
+        description: str = "Clear description for what this tool is useful for, your agent will need this information to use it."
+        cache_function: Callable = lambda: False
+
+        def _run(self, question: str) -> str:
+            return question
+
+    my_tool = MyCustomTool()
+    assert not my_tool.cache_function()
+
+
+def test_default_cache_function_is_true():
+    class MyCustomTool(BaseTool):
+        name: str = "Name of my tool"
+        description: str = "Clear description for what this tool is useful for, your agent will need this information to use it."
+
+        def _run(self, question: str) -> str:
+            return question
+
+    my_tool = MyCustomTool()
+    assert my_tool.cache_function()
+
+
+def test_result_as_answer_in_tool_decorator():
+    @tool("Tool with result as answer", result_as_answer=True)
+    def my_tool_with_result_as_answer(question: str) -> str:
+        """This tool will return its result as the final answer."""
+        return question
+
+    assert my_tool_with_result_as_answer.result_as_answer is True
+
+    converted_tool = my_tool_with_result_as_answer.to_structured_tool()
+    assert converted_tool.result_as_answer is True
+
+    @tool("Tool with default result_as_answer")
+    def my_tool_with_default(question: str) -> str:
+        """This tool uses the default result_as_answer value."""
+        return question
+
+    assert my_tool_with_default.result_as_answer is False
+
+    converted_tool = my_tool_with_default.to_structured_tool()
+    assert converted_tool.result_as_answer is False
+
+
+class SyncTool(BaseTool):
+    """Test implementation with a synchronous _run method"""
+
+    name: str = "sync_tool"
+    description: str = "A synchronous tool for testing"
+
+    def _run(self, input_text: str) -> str:
+        """Process input text synchronously."""
+        return f"Processed {input_text} synchronously"
+
+
+class AsyncTool(BaseTool):
+    """Test implementation with an asynchronous _run method"""
+
+    name: str = "async_tool"
+    description: str = "An asynchronous tool for testing"
+
+    async def _run(self, input_text: str) -> str:
+        """Process input text asynchronously."""
+        await asyncio.sleep(0.1)
+        return f"Processed {input_text} asynchronously"
+
+
+def test_sync_run_returns_direct_result():
+    """Test that _run in a synchronous tool returns a direct result, not a coroutine."""
+    tool = SyncTool()
+    result = tool._run(input_text="hello")
+
+    assert not asyncio.iscoroutine(result)
+    assert result == "Processed hello synchronously"
+
+    run_result = tool.run(input_text="hello")
+    assert run_result == "Processed hello synchronously"
+
+
+def test_async_run_returns_coroutine():
+    """Test that _run in an asynchronous tool returns a coroutine object."""
+    tool = AsyncTool()
+    result = tool._run(input_text="hello")
+
+    assert asyncio.iscoroutine(result)
+    result.close()
+
+
+def test_run_calls_asyncio_run_for_async_tools():
+    """Test that asyncio.run is called when using async tools."""
+    async_tool = AsyncTool()
+
+    with patch("asyncio.run") as mock_run:
+        mock_run.return_value = "Processed test asynchronously"
+        async_result = async_tool.run(input_text="test")
+
+        mock_run.assert_called_once()
+        assert async_result == "Processed test asynchronously"
+
+
+def test_run_does_not_call_asyncio_run_for_sync_tools():
+    """Test that asyncio.run is NOT called when using sync tools."""
+    sync_tool = SyncTool()
+
+    with patch("asyncio.run") as mock_run:
+        sync_result = sync_tool.run(input_text="test")
+
+        mock_run.assert_not_called()
+        assert sync_result == "Processed test synchronously"
+
+
+@pytest.mark.vcr()
+def test_max_usage_count_is_respected():
+    class IteratingTool(BaseTool):
+        name: str = "iterating_tool"
+        description: str = "A tool that iterates a given number of times"
+
+        def _run(self, input_text: str):
+            return f"Iteration {input_text}"
+
+    tool = IteratingTool(max_usage_count=5)
+
+    agent = Agent(
+        role="Iterating Agent",
+        goal="Call the iterating tool 5 times",
+        backstory="You are an agent that iterates a given number of times",
+        tools=[tool],
+    )
+
+    task = Task(
+        description="Call the iterating tool 5 times",
+        expected_output="A list of the iterations",
+        agent=agent,
+    )
+
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        verbose=True,
+    )
+
+    crew.kickoff()
+    assert tool.max_usage_count == 5
+    assert tool.current_usage_count == 5
+
+
+# Schema Validation in run() Tests
+
+
+class CodeExecutorInput(BaseModel):
+    code: str = Field(description="The code to execute")
+    language: str = Field(default="python", description="Programming language")
+
+
+class CodeExecutorTool(BaseTool):
+    name: str = "code_executor"
+    description: str = "Execute code snippets"
+    args_schema: type[BaseModel] = CodeExecutorInput
+
+    def _run(self, code: str, language: str = "python") -> str:
+        return f"Executed {language}: {code}"
+
+
+class TestBaseToolRunValidation:
+    """Tests for args_schema validation in BaseTool.run()."""
+
+    def test_run_with_valid_kwargs_passes_validation(self) -> None:
+        """Valid keyword arguments should pass schema validation and execute."""
+        t = CodeExecutorTool()
+        result = t.run(code="print('hello')")
+        assert result == "Executed python: print('hello')"
+
+    def test_run_with_all_kwargs_passes_validation(self) -> None:
+        """All keyword arguments including optional ones should pass."""
+        t = CodeExecutorTool()
+        result = t.run(code="console.log('hi')", language="javascript")
+        assert result == "Executed javascript: console.log('hi')"
+
+    def test_run_with_no_args_raises_validation_error(self) -> None:
+        """Calling run() with no arguments should raise a clear ValueError,
+        not a cryptic TypeError about missing positional arguments (GH-4611)."""
+        t = CodeExecutorTool()
+        with pytest.raises(ValueError, match="validation failed"):
+            t.run()
+
+    def test_run_with_missing_required_kwarg_raises(self) -> None:
+        """Missing required kwargs should raise ValueError from schema validation."""
+        t = CodeExecutorTool()
+        with pytest.raises(ValueError, match="validation failed"):
+            t.run(language="python")
+
+    def test_run_with_wrong_field_name_raises(self) -> None:
+        """Kwargs not matching any schema field should trigger validation error
+        for missing required fields."""
+        t = CodeExecutorTool()
+        with pytest.raises(ValueError, match="validation failed"):
+            t.run(wrong_arg="value")
+
+    def test_run_with_positional_args_skips_validation(self) -> None:
+        """Positional-arg calls should bypass schema validation (backwards compat)."""
+        class SimpleTool(BaseTool):
+            name: str = "simple"
+            description: str = "A simple tool"
+
+            def _run(self, question: str) -> str:
+                return question
+
+        t = SimpleTool()
+        result = t.run("What is life?")
+        assert result == "What is life?"
+
+    def test_run_strips_extra_kwargs_from_llm(self) -> None:
+        """Extra kwargs not in the schema should be silently stripped,
+        preventing unexpected-keyword crashes in _run."""
+        t = CodeExecutorTool()
+        result = t.run(code="1+1", extra_hallucinated_field="junk")
+        assert result == "Executed python: 1+1"
+
+    def test_run_increments_usage_after_validation(self) -> None:
+        """Usage count should still increment after validated execution."""
+        t = CodeExecutorTool()
+        assert t.current_usage_count == 0
+        t.run(code="x = 1")
+        assert t.current_usage_count == 1
+
+    def test_run_does_not_increment_usage_on_validation_error(self) -> None:
+        """Usage count should NOT increment when validation fails."""
+        t = CodeExecutorTool()
+        assert t.current_usage_count == 0
+        with pytest.raises(ValueError):
+            t.run(wrong="bad")
+        assert t.current_usage_count == 0
+
+
+class TestToolDecoratorRunValidation:
+    """Tests for args_schema validation in Tool.run() (decorator-based tools)."""
+
+    def test_decorator_tool_run_validates_kwargs(self) -> None:
+        """Decorator-created tools should also validate kwargs against schema."""
+        @tool("execute_code")
+        def execute_code(code: str, language: str = "python") -> str:
+            """Execute a code snippet."""
+            return f"Executed {language}: {code}"
+
+        result = execute_code.run(code="x = 1")
+        assert result == "Executed python: x = 1"
+
+    def test_decorator_tool_run_rejects_missing_required(self) -> None:
+        """Decorator tools should reject missing required args via validation."""
+        @tool("execute_code")
+        def execute_code(code: str) -> str:
+            """Execute a code snippet."""
+            return f"Executed: {code}"
+
+        with pytest.raises(ValueError, match="validation failed"):
+            execute_code.run(wrong_arg="value")
+
+    def test_decorator_tool_positional_args_still_work(self) -> None:
+        """Positional args to decorator tools should bypass validation."""
+        @tool("greet")
+        def greet(name: str) -> str:
+            """Greet someone."""
+            return f"Hello, {name}!"
+
+        result = greet.run("World")
+        assert result == "Hello, World!"
+
+
+class SearchOutput(BaseModel):
+    query: str
+    score: float
+
+
+class SearchResults(RootModel[list[SearchOutput]]):
+    pass
+
+
+class ExplicitSearchTool(BaseTool):
+    name: str = "search"
+    description: str = "Search for a query"
+    result_schema: type[BaseModel] = SearchOutput
+
+    def _run(self, query: str) -> dict[str, object]:
+        return {"query": query, "score": 0.8}
+
+
+class InferredSearchTool(BaseTool):
+    name: str = "search"
+    description: str = "Search for a query"
+
+    def _run(self, query: str) -> SearchOutput:
+        return SearchOutput(query=query, score=0.7)
+
+
+class RootSearchTool(BaseTool):
+    name: str = "search"
+    description: str = "Search for a query"
+
+    def _run(self, query: str) -> SearchResults:
+        return SearchResults([SearchOutput(query=query, score=1.0)])
+
+
+class DictAnnotatedSearchTool(BaseTool):
+    name: str = "search"
+    description: str = "Search for a query"
+
+    def _run(self, query: str) -> dict[str, object]:
+        return {"query": query, "score": 0.5}
+
+
+def _make_explicit_decorator_tool() -> BaseTool:
+    @tool("search", result_schema=SearchOutput)
+    def search(query: str) -> dict[str, object]:
+        """Search for a query."""
+        return {"query": query, "score": 0.8}
+
+    return search
+
+
+def _make_inferred_decorator_tool() -> BaseTool:
+    @tool("search")
+    def search(query: str) -> SearchOutput:
+        """Search for a query."""
+        return SearchOutput(query=query, score=0.6)
+
+    return search
+
+
+def _make_root_decorator_tool() -> BaseTool:
+    @tool("search")
+    def search(query: str) -> SearchResults:
+        """Search for a query."""
+        return SearchResults([SearchOutput(query=query, score=1.0)])
+
+    return search
+
+
+class TestToolOutputSchema:
+    @pytest.mark.parametrize(
+        ("tool_cls", "expected_raw", "expected_agent_payload"),
+        [
+            pytest.param(
+                ExplicitSearchTool,
+                {"query": "crew", "score": 0.8},
+                {"query": "crew", "score": 0.8},
+                id="explicit-schema",
+            ),
+            pytest.param(
+                InferredSearchTool,
+                SearchOutput(query="crew", score=0.7),
+                {"query": "crew", "score": 0.7},
+                id="inferred-base-model",
+            ),
+            pytest.param(
+                RootSearchTool,
+                SearchResults([SearchOutput(query="crew", score=1.0)]),
+                [{"query": "crew", "score": 1.0}],
+                id="inferred-root-model",
+            ),
+        ],
+    )
+    def test_base_tools_return_raw_result_and_json_agent_text(
+        self,
+        tool_cls: type[BaseTool],
+        expected_raw: object,
+        expected_agent_payload: object,
+    ) -> None:
+        t = tool_cls()
+
+        raw_result = t.run(query="crew")
+
+        assert raw_result == expected_raw
+        assert json.loads(t.format_output_for_agent(raw_result)) == (
+            expected_agent_payload
+        )
+
+    def test_base_tool_does_not_infer_non_pydantic_return_annotation(self) -> None:
+        t = DictAnnotatedSearchTool()
+
+        raw_result = t.run(query="crew")
+
+        assert raw_result == {"query": "crew", "score": 0.5}
+        assert t.format_output_for_agent(raw_result) == str(raw_result)
+
+    @pytest.mark.parametrize(
+        ("make_tool", "expected_raw", "expected_agent_payload"),
+        [
+            pytest.param(
+                _make_explicit_decorator_tool,
+                {"query": "crew", "score": 0.8},
+                {"query": "crew", "score": 0.8},
+                id="explicit-schema",
+            ),
+            pytest.param(
+                _make_inferred_decorator_tool,
+                SearchOutput(query="crew", score=0.6),
+                {"query": "crew", "score": 0.6},
+                id="inferred-base-model",
+            ),
+            pytest.param(
+                _make_root_decorator_tool,
+                SearchResults([SearchOutput(query="crew", score=1.0)]),
+                [{"query": "crew", "score": 1.0}],
+                id="inferred-root-model",
+            ),
+        ],
+    )
+    def test_decorator_tools_return_raw_result_and_json_agent_text(
+        self,
+        make_tool: Callable[[], BaseTool],
+        expected_raw: object,
+        expected_agent_payload: object,
+    ) -> None:
+        search = make_tool()
+
+        raw_result = search.run(query="crew")
+
+        assert raw_result == expected_raw
+        assert json.loads(search.format_output_for_agent(raw_result)) == (
+            expected_agent_payload
+        )
+
+    def test_decorator_tool_does_not_infer_non_pydantic_return_annotation(
+        self,
+    ) -> None:
+        @tool("search")
+        def search(query: str) -> dict[str, object]:
+            """Search for a query."""
+            return {"query": query, "score": 0.5}
+
+        raw_result = search.run(query="crew")
+
+        assert raw_result == {"query": "crew", "score": 0.5}
+        assert search.format_output_for_agent(raw_result) == str(raw_result)
+
+    def test_explicit_result_schema_wins_over_return_annotation(self) -> None:
+        class AlternateOutput(BaseModel):
+            value: str
+
+        @tool("search", result_schema=AlternateOutput)
+        def search(query: str) -> SearchOutput:
+            """Search for a query."""
+            return SearchOutput(query=query, score=0.6)
+
+        raw_result = search.run(query="crew")
+
+        with pytest.warns(RuntimeWarning, match="AlternateOutput"):
+            agent_text = search.format_output_for_agent(raw_result)
+
+        assert raw_result == SearchOutput(query="crew", score=0.6)
+        assert agent_text == str(raw_result)
+
+    def test_invalid_typed_output_warns_and_uses_string_agent_text(
+        self,
+    ) -> None:
+        @tool("search", result_schema=SearchOutput)
+        def search(query: str) -> dict[str, object]:
+            """Search for a query."""
+            return {"query": query, "score": "not-a-float"}
+
+        raw_result = search.run(query="crew")
+
+        with pytest.warns(RuntimeWarning, match="Failed to validate or serialize"):
+            agent_text = search.format_output_for_agent(raw_result)
+
+        assert raw_result == {"query": "crew", "score": "not-a-float"}
+        assert agent_text == str(raw_result)
+
+    def test_unserializable_typed_output_warns_and_uses_string_agent_text(
+        self,
+    ) -> None:
+        class OpaqueOutput(BaseModel):
+            value: object
+
+        raw_result = OpaqueOutput(value=object())
+
+        @tool("opaque", result_schema=OpaqueOutput)
+        def opaque() -> OpaqueOutput:
+            """Return an opaque object."""
+            return raw_result
+
+        result = opaque.run()
+
+        with pytest.warns(RuntimeWarning, match="Failed to validate or serialize"):
+            agent_text = opaque.format_output_for_agent(result)
+
+        assert result is raw_result
+        assert agent_text == str(raw_result)
+
+    def test_result_schema_behavior_carries_over_to_structured_tool(self) -> None:
+        structured = ExplicitSearchTool().to_structured_tool()
+
+        raw_result = structured.invoke({"query": "crew"})
+
+        assert raw_result == {"query": "crew", "score": 0.8}
+        assert json.loads(structured.format_output_for_agent(raw_result)) == {
+            "query": "crew",
+            "score": 0.8,
+        }
+
+    def test_custom_agent_output_formatter_carries_over_to_structured_tool(
+        self,
+    ) -> None:
+        class MarkdownSearchTool(BaseTool):
+            name: str = "markdown_search"
+            description: str = "Search for information"
+            result_schema: type[BaseModel] = SearchOutput
+
+            def _run(self, query: str) -> SearchOutput:
+                return SearchOutput(query=query, score=0.8)
+
+            def format_output_for_agent(self, raw_result: object) -> str:
+                result = self.result_schema.model_validate(raw_result)
+                return f"### Search result\n\n- Query: `{result.query}`\n- Score: {result.score}"
+
+        structured = MarkdownSearchTool().to_structured_tool()
+
+        raw_result = structured.invoke({"query": "crew"})
+
+        assert raw_result == SearchOutput(query="crew", score=0.8)
+        assert structured.format_output_for_agent(raw_result) == (
+            "### Search result\n\n- Query: `crew`\n- Score: 0.8"
+        )
+
+# Async arun() Schema Validation Tests
+
+
+class AsyncCodeExecutorTool(BaseTool):
+    name: str = "async_code_executor"
+    description: str = "Execute code snippets asynchronously"
+    args_schema: type[BaseModel] = CodeExecutorInput
+
+    async def _arun(self, code: str, language: str = "python") -> str:
+        return f"Async executed {language}: {code}"
+
+    def _run(self, code: str, language: str = "python") -> str:
+        return f"Executed {language}: {code}"
+
+
+class TestBaseToolArunValidation:
+    """Tests for args_schema validation in BaseTool.arun()."""
+
+    @pytest.mark.asyncio
+    async def test_arun_with_valid_kwargs_passes_validation(self) -> None:
+        """Valid keyword arguments should pass schema validation in arun."""
+        t = AsyncCodeExecutorTool()
+        result = await t.arun(code="print('hello')")
+        assert result == "Async executed python: print('hello')"
+
+    @pytest.mark.asyncio
+    async def test_arun_with_no_args_raises_validation_error(self) -> None:
+        """Calling arun() with no arguments should raise a clear ValueError (GH-4611)."""
+        t = AsyncCodeExecutorTool()
+        with pytest.raises(ValueError, match="validation failed"):
+            await t.arun()
+
+    @pytest.mark.asyncio
+    async def test_arun_with_missing_required_kwarg_raises(self) -> None:
+        """Missing required kwargs should raise ValueError in arun."""
+        t = AsyncCodeExecutorTool()
+        with pytest.raises(ValueError, match="validation failed"):
+            await t.arun(language="python")
+
+    @pytest.mark.asyncio
+    async def test_arun_with_wrong_field_name_raises(self) -> None:
+        """Kwargs not matching schema fields should trigger validation error in arun."""
+        t = AsyncCodeExecutorTool()
+        with pytest.raises(ValueError, match="validation failed"):
+            await t.arun(wrong_arg="value")
+
+    @pytest.mark.asyncio
+    async def test_arun_strips_extra_kwargs(self) -> None:
+        """Extra kwargs not in the schema should be stripped in arun."""
+        t = AsyncCodeExecutorTool()
+        result = await t.arun(code="1+1", extra_field="junk")
+        assert result == "Async executed python: 1+1"
+
+    @pytest.mark.asyncio
+    async def test_arun_does_not_increment_usage_on_validation_error(self) -> None:
+        """Usage count should NOT increment when arun validation fails."""
+        t = AsyncCodeExecutorTool()
+        assert t.current_usage_count == 0
+        with pytest.raises(ValueError):
+            await t.arun(wrong="bad")
+        assert t.current_usage_count == 0
+
+
+class TestToolDecoratorArunValidation:
+    """Tests for args_schema validation in Tool.arun() (decorator-based async tools)."""
+
+    @pytest.mark.asyncio
+    async def test_async_decorator_tool_arun_validates_kwargs(self) -> None:
+        """Async decorator tools should validate kwargs in arun."""
+        @tool("async_execute")
+        async def async_execute(code: str, language: str = "python") -> str:
+            """Execute code asynchronously."""
+            return f"Async {language}: {code}"
+
+        result = await async_execute.arun(code="x = 1")
+        assert result == "Async python: x = 1"
+
+    @pytest.mark.asyncio
+    async def test_async_decorator_tool_arun_rejects_missing_required(self) -> None:
+        """Async decorator tools should reject missing required args in arun."""
+        @tool("async_execute")
+        async def async_execute(code: str) -> str:
+            """Execute code asynchronously."""
+            return f"Async: {code}"
+
+        with pytest.raises(ValueError, match="validation failed"):
+            await async_execute.arun(wrong_arg="value")

@@ -1,0 +1,44 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "Write a very long
+      story about a dragon."}]}], "inferenceConfig": {"maxTokens": 10}}'
+    headers:
+      Content-Length:
+      - '136'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - X-USER-AGENT-XXX
+      accept-encoding:
+      - ACCEPT-ENCODING-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - attempt=1
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: '{"metrics":{"latencyMs":1421},"output":{"message":{"content":[{"text":"#
+        The Last Ember of Varathorn"}],"role":"assistant"}},"stopReason":"max_tokens","usage":{"cacheReadInputTokenCount":0,"cacheReadInputTokens":0,"cacheWriteInputTokenCount":0,"cacheWriteInputTokens":0,"inputTokens":16,"outputTokens":10,"serverToolUsage":{},"totalTokens":26}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '344'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:05:16 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+version: 1

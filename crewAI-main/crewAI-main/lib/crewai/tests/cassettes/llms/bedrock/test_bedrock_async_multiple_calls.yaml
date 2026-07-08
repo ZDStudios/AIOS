@@ -1,0 +1,86 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "What is 1+1?"}]}],
+      "inferenceConfig": {}}'
+    headers:
+      Content-Length:
+      - '94'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - X-USER-AGENT-XXX
+      accept-encoding:
+      - ACCEPT-ENCODING-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - attempt=1
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: '{"metrics":{"latencyMs":2148},"output":{"message":{"content":[{"text":"1
+        + 1 = **2**"}],"role":"assistant"}},"stopReason":"end_turn","usage":{"cacheReadInputTokenCount":0,"cacheReadInputTokens":0,"cacheWriteInputTokenCount":0,"cacheWriteInputTokens":0,"inputTokens":14,"outputTokens":14,"serverToolUsage":{},"totalTokens":28}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '326'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:05:12 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "What is 2+2?"}]}],
+      "inferenceConfig": {}}'
+    headers:
+      Content-Length:
+      - '94'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - X-USER-AGENT-XXX
+      accept-encoding:
+      - ACCEPT-ENCODING-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - attempt=1
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: '{"metrics":{"latencyMs":1443},"output":{"message":{"content":[{"text":"2
+        + 2 = **4**"}],"role":"assistant"}},"stopReason":"end_turn","usage":{"cacheReadInputTokenCount":0,"cacheReadInputTokens":0,"cacheWriteInputTokenCount":0,"cacheWriteInputTokens":0,"inputTokens":14,"outputTokens":14,"serverToolUsage":{},"totalTokens":28}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '326'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:05:14 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+version: 1

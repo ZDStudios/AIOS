@@ -1,0 +1,44 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "Say hello"}]}], "inferenceConfig":
+      {}}'
+    headers:
+      Content-Length:
+      - '91'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - X-USER-AGENT-XXX
+      accept-encoding:
+      - ACCEPT-ENCODING-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - attempt=1
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: "{\"metrics\":{\"latencyMs\":2397},\"output\":{\"message\":{\"content\":[{\"text\":\"Hello!
+        \U0001F44B How are you doing? Is there something I can help you with today?\"}],\"role\":\"assistant\"}},\"stopReason\":\"end_turn\",\"usage\":{\"cacheReadInputTokenCount\":0,\"cacheReadInputTokens\":0,\"cacheWriteInputTokenCount\":0,\"cacheWriteInputTokens\":0,\"inputTokens\":9,\"outputTokens\":24,\"serverToolUsage\":{},\"totalTokens\":33}}"
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '388'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:05:24 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+version: 1

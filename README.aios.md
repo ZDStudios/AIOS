@@ -1,21 +1,28 @@
 # The AI OS
 
-One control surface — `aios` — that installs, configures, wires, runs, tests, and debugs five
-independent agent projects as a single system, from one command and one config.
+One control surface — `aios` — and one web **Control Room** that install, configure, wire, run, test,
+and debug five independent AI agents as a single system, from one command and one config.
 
 ```
-opencode  ·  hermes  ·  openclaw  ·  openclaw-os  ·  LifeOS
+opencode  ·  hermes  ·  openclaw  ·  CrewAI  ·  LifeOS      (+ AIOS Hub · openclaw-os · OpenUI)
 ```
 
 - **opencode** — the coding-agent engine (headless server on :4096)
 - **hermes** — autonomous agent + web dashboard (:9119), memory, cron, learning loop
 - **openclaw** — multi-channel messaging gateway (:18789) and plugin host
-- **openclaw-os** — the **dashboard / front door**, served inside openclaw at `/plugins/openclawos/`
+- **CrewAI** — multi-agent orchestration (role-based crews) on :4788, with a tool to call other agents
 - **LifeOS** — shared skills/identity mounted into the agents
 
-> "One file" in practice = **one control script** (`aios`) + **one config** (`aios.config.yaml`)
-> + **one secrets file** (`.env`). You can't merge three runtimes into a single file; this is the
-> faithful version — a single command that makes all five work together.
+Glued together by:
+
+- **AIOS Hub** — the **Control Room** at **:8787**: talk to everything, broadcast, live status, and the
+  interconnect bus that lets agents call each other. (`aios_hub.py`, stdlib.)
+- **openclaw-os** — openclaw's generative-UI **dashboard** (a plugin), embedded in the Control Room
+- **OpenUI** — generative-UI standard (https://www.openui.com), mounted into every agent
+
+> "One file" in practice = **one control script** (`aios`) + **one dashboard** (the Hub) + **one config**
+> (`aios.config.yaml`) + **one secrets file** (`.env`). You can't merge multiple runtimes into a single
+> file; this is the faithful version — one command + one Control Room that make all five work together.
 
 ---
 
@@ -46,30 +53,38 @@ When something is off, run **`aios doctor`** first — it names the problem and 
 ## Architecture
 
 ```
-                        ┌──────────────────────────────────────┐
-                        │  openclaw-os  (dashboard / front door) │
-                        │  http://127.0.0.1:18789/plugins/openclawos/
-                        └───────────────────┬──────────────────┘
-                                 served as a plugin inside
-                        ┌───────────────────▼──────────────────┐
-                        │  openclaw  gateway  :18789            │  channels + plugin host
-                        └───────────────────────────────────────┘
-        ┌───────────────────────────┐        ┌───────────────────────────┐
-        │  hermes  dashboard  :9119 │        │  opencode  server  :4096  │
-        │  autonomous + memory+cron │        │  coding engine (HTTP/SDK) │
-        └───────────────────────────┘        └───────────────────────────┘
-                        ┌───────────────────────────────────────┐
-                        │  LifeOS — skills mounted into agents  │
-                        └───────────────────────────────────────┘
+                ┌──────────────────────────────────────────────────┐
+                │  💬 AIOS Hub — the Control Room   :8787            │  talk to everything
+                │  chat · broadcast · live status · interconnect     │
+                └──┬─────────────┬─────────────┬───────────────┬─────┘
+       ┌───────────┘     ┌───────┘       ┌─────┘         ┌─────┘
+ ┌─────▼──────┐   ┌───────▼──────┐  ┌─────▼──────┐  ┌─────▼───────┐
+ │ opencode   │   │ hermes :9119 │  │ openclaw   │  │ CrewAI :4788│
+ │ :4096      │   │ autonomous   │  │ :18789     │  │ crews +     │
+ │ coding     │   │ memory·cron  │  │ (hosts     │  │ ask_peer    │
+ └────────────┘   └──────────────┘  │ openclaw-os)│ └─────────────┘
+   agents call each other via the Hub└─────┬──────┘
+                                    ┌──────▼───────────────┐
+                                    │ openclaw-os (OpenUI)  │  dashboard
+                                    └───────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────┐
+ │ LifeOS skills + OpenUI context — mounted into every agent          │
+ └──────────────────────────────────────────────────────────────────┘
 
   Single source of truth:  aios.config.yaml  +  .env   →  rendered into each project's native config
   Single control surface:  ./aios <command>            →  state kept under .aios/
+  The Control Room:        http://127.0.0.1:8787/       →  aios_hub.py (stdlib)
 ```
 
 **Model config flows one way:** you set the provider + key **once** in `.env`
 (`AIOS_LLM_PROVIDER`, `AIOS_LLM_API_KEY`). `aios setup` maps it to each project's own variable
-(`OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) and injects it at start — so all
-four agents share one key. Change it in one place, re-run `aios setup`, done.
+(`OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) and injects it at start — and the Hub +
+CrewAI also get the raw `AIOS_LLM_*` — so all five agents share one key. Change it in one place, re-run
+`aios setup`, done.
+
+**The interconnect:** every service is started with each peer's URL (`AIOS_OPENCODE_URL`, `AIOS_HERMES_URL`,
+`AIOS_OPENCLAW_URL`, `AIOS_CREWAI_URL`, `AIOS_HUB_URL`), so agents can reach each other through the Hub.
+CrewAI ships an `ask_peer` tool; the Hub exposes `POST /api/relay` for the rest.
 
 **hermes and openclaw overlap** (both are gateways). By design they run as **separate** services
 on separate ports, each toggleable in `aios.config.yaml`. Default division of labor:

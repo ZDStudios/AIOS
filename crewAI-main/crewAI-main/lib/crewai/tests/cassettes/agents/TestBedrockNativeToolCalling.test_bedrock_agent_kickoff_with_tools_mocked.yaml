@@ -1,0 +1,105 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "\nCurrent Task: Calculate
+      15 * 8\n\nThis is the expected criteria for your final answer: Result\nyou MUST
+      return the actual complete content as the final answer, not a summary."}]}],
+      "inferenceConfig": {"stopSequences": ["\nObservation:"]}, "system": [{"text":
+      "You are Math Assistant. You calculate.\nYour personal goal is: Calculate math"}],
+      "toolConfig": {"tools": [{"toolSpec": {"name": "calculator", "description":
+      "Perform mathematical calculations. Use this for any math operations.", "inputSchema":
+      {"json": {"properties": {"expression": {"description": "Mathematical expression
+      to evaluate", "title": "Expression", "type": "string"}}, "required": ["expression"],
+      "type": "object", "additionalProperties": false}}}}]}}'
+    headers:
+      Content-Length:
+      - '779'
+      Content-Type:
+      - !!binary |
+        YXBwbGljYXRpb24vanNvbg==
+      User-Agent:
+      - X-USER-AGENT-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - !!binary |
+        YXR0ZW1wdD0x
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: '{"metrics":{"latencyMs":1957},"output":{"message":{"content":[{"text":"I''ll
+        calculate 15 * 8 right away!"},{"toolUse":{"input":{"expression":"15 * 8"},"name":"calculator","toolUseId":"tooluse_XaQHWn1gW8bA6RHCR5fue8","type":"tool_use"}}],"role":"assistant"}},"stopReason":"tool_use","usage":{"cacheReadInputTokenCount":0,"cacheReadInputTokens":0,"cacheWriteInputTokenCount":0,"cacheWriteInputTokens":0,"inputTokens":642,"outputTokens":69,"serverToolUsage":{},"totalTokens":711}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '477'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:05:59 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "\nCurrent Task: Calculate
+      15 * 8\n\nThis is the expected criteria for your final answer: Result\nyou MUST
+      return the actual complete content as the final answer, not a summary."}]},
+      {"role": "assistant", "content": [{"toolUse": {"toolUseId": "tooluse_XaQHWn1gW8bA6RHCR5fue8",
+      "name": "calculator", "input": {"expression": "15 * 8"}}}]}, {"role": "user",
+      "content": [{"toolResult": {"toolUseId": "tooluse_XaQHWn1gW8bA6RHCR5fue8", "content":
+      [{"text": "The result of 15 * 8 is 120"}]}}]}], "inferenceConfig": {"stopSequences":
+      ["\nObservation:"]}, "system": [{"text": "You are Math Assistant. You calculate.\nYour
+      personal goal is: Calculate math"}], "toolConfig": {"tools": [{"toolSpec": {"name":
+      "calculator", "description": "Perform mathematical calculations. Use this for
+      any math operations.", "inputSchema": {"json": {"properties": {"expression":
+      {"description": "Mathematical expression to evaluate", "title": "Expression",
+      "type": "string"}}, "required": ["expression"], "type": "object", "additionalProperties":
+      false}}}}]}}'
+    headers:
+      Content-Length:
+      - '1084'
+      Content-Type:
+      - !!binary |
+        YXBwbGljYXRpb24vanNvbg==
+      User-Agent:
+      - X-USER-AGENT-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - !!binary |
+        YXR0ZW1wdD0x
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: '{"metrics":{"latencyMs":1689},"output":{"message":{"content":[{"text":"120"}],"role":"assistant"}},"stopReason":"end_turn","usage":{"cacheReadInputTokenCount":0,"cacheReadInputTokens":0,"cacheWriteInputTokenCount":0,"cacheWriteInputTokens":0,"inputTokens":723,"outputTokens":4,"serverToolUsage":{},"totalTokens":727}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '317'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:06:01 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+version: 1

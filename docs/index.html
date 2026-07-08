@@ -169,7 +169,7 @@
   <div class="wrap">
     <div class="pill"><span class="dot"></span> Verified on Windows 11 · one command to run</div>
     <h1>Five open-source AI agents.<br><span class="grad-text">One operating system.</span></h1>
-    <p class="sub">The AI OS unifies <b>opencode</b>, <b>hermes</b>, <b>openclaw</b>, <b>openclaw-os</b> and <b>LifeOS</b> into a single auto-configured system you drive from one command: <span class="mono">aios</span>.</p>
+    <p class="sub">The AI OS unifies <b>opencode</b>, <b>hermes</b>, <b>openclaw</b>, <b>CrewAI</b> and <b>LifeOS</b> into one auto-configured system — with a <b>Control Room</b> where you talk to everything and the agents talk to each other.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="#quickstart">Get started →</a>
       <a class="btn btn-ghost" href="https://github.com/ZDStudios/AIOS" target="_blank" rel="noopener">View on GitHub</a>
@@ -186,10 +186,10 @@
     </div>
 
     <div class="chips">
-      <span class="chip"><b>1</b> control script</span>
+      <span class="chip"><b>1</b> Control Room</span>
       <span class="chip"><b>1</b> config</span>
-      <span class="chip"><b>1</b> API key → <b>4</b> agents</span>
-      <span class="chip"><b>0</b> extra deps</span>
+      <span class="chip"><b>1</b> API key → <b>5</b> agents</span>
+      <span class="chip">agents ↔ agents</span>
     </div>
 
     <div class="term">
@@ -231,10 +231,10 @@
         <div class="port">:18789</div>
       </div>
       <div class="card reveal">
-        <div class="ico" style="background:rgba(6,182,212,.14);color:var(--cyan)">🪟</div>
-        <h3>openclaw-os</h3>
-        <div class="role">The generative-UI dashboard — the front door, served inside the gateway.</div>
-        <div class="port">/plugins/openclawos/</div>
+        <div class="ico" style="background:rgba(6,182,212,.14);color:var(--cyan)">👥</div>
+        <h3>CrewAI</h3>
+        <div class="role">Multi-agent orchestration — role-based crews that plan and delegate, with a tool to call the other agents.</div>
+        <div class="port">:4788</div>
       </div>
       <div class="card reveal">
         <div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">🧬</div>
@@ -243,6 +243,8 @@
         <div class="port">skills layer</div>
       </div>
     </div>
+    <p class="lead reveal" style="margin-top:28px">Glued together by the <b>AIOS Hub</b> (the Control Room, <span class="mono">:8787</span>), the
+      <b>openclaw-os</b> generative-UI dashboard, and <b><a href="https://www.openui.com" target="_blank" rel="noopener" style="color:var(--cyan)">OpenUI</a></b> — mounted into every agent.</p>
   </div>
 </section>
 
@@ -253,7 +255,7 @@
     <div class="grid g3">
       <div class="card feat reveal"><div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">⚡</div><h3>One command to rule them all</h3><div class="role"><span class="mono">aios setup</span> installs bun / pnpm / uv / Node, every project's deps, builds what needs building, and wires it together. Idempotent.</div></div>
       <div class="card feat reveal"><div class="ico" style="background:rgba(6,182,212,.14);color:var(--cyan)">🔑</div><h3>One key, every agent</h3><div class="role">Set your provider + API key once in <span class="mono">.env</span>. The AI OS maps it into each project's config — change it in one place.</div></div>
-      <div class="card feat reveal"><div class="ico" style="background:rgba(236,72,153,.14);color:var(--pink)">🪟</div><h3>A dashboard front door</h3><div class="role">The openclaw-os generative-UI workspace: sessions, live apps, charts and forms in one pane of glass.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(236,72,153,.14);color:var(--pink)">💬</div><h3>One Control Room</h3><div class="role">Chat with any agent — Brain, CrewAI, opencode — or broadcast to all. Watch them call each other, with hermes &amp; openclaw-os embedded and OpenUI results rendered live.</div></div>
       <div class="card feat reveal"><div class="ico" style="background:rgba(34,197,94,.14);color:var(--green)">🩺</div><h3>Doctor that tells you the fix</h3><div class="role"><span class="mono">aios doctor</span> checks toolchains, config, deps and ports — and prints the exact command to fix each problem.</div></div>
       <div class="card feat reveal"><div class="ico" style="background:rgba(245,158,11,.14);color:var(--amber)">🧪</div><h3>Unified testing & debugging</h3><div class="role"><span class="mono">aios test --smoke</span> drives the whole stack end-to-end. <span class="mono">aios debug</span> dumps resolved config with secrets masked.</div></div>
       <div class="card feat reveal"><div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">🪟</div><h3>Windows-first, cross-platform</h3><div class="role">Built and verified on Windows 11 (PowerShell), with POSIX / macOS / Linux / WSL parity. Zero-dependency Python core.</div></div>
@@ -267,30 +269,33 @@
     <h2 class="reveal">Architecture</h2>
     <div class="arch reveal">
       <div class="layer">
-        <div class="node front">
-          <b>openclaw-os · dashboard</b>
-          <span class="tag">:18789/plugins/openclawos/</span>
+        <div class="node front" style="min-width:320px">
+          <b>💬 AIOS Hub · the Control Room <span class="tag">:8787</span></b>
+          <small>talk to everything · broadcast · live status · interconnect</small>
         </div>
-        <div class="conn">▲ served as a plugin inside</div>
-        <div class="node" style="min-width:280px">
-          <b>openclaw · gateway <span class="tag">:18789</span></b>
-          <small>channels + plugin host</small>
-        </div>
-        <div class="conn">▲ &nbsp; ▲</div>
+        <div class="conn">▲ routes to &amp; between every agent</div>
         <div class="row">
           <div class="node">
-            <b>hermes · dashboard <span class="tag">:9119</span></b>
+            <b>opencode <span class="tag">:4096</span></b>
+            <small>coding engine</small>
+          </div>
+          <div class="node">
+            <b>hermes <span class="tag">:9119</span></b>
             <small>autonomous · memory · cron</small>
           </div>
           <div class="node">
-            <b>opencode · server <span class="tag">:4096</span></b>
-            <small>coding engine · HTTP / SDK</small>
+            <b>openclaw <span class="tag">:18789</span></b>
+            <small>channels + hosts openclaw-os</small>
+          </div>
+          <div class="node">
+            <b>CrewAI <span class="tag">:4788</span></b>
+            <small>multi-agent crews</small>
           </div>
         </div>
-        <div class="conn">▲ shared skills / context</div>
-        <div class="node base" style="min-width:280px">
-          <b>LifeOS</b>
-          <small>identity + skills mounted into the agents</small>
+        <div class="conn">▲ agents call each other via the Hub</div>
+        <div class="node base" style="min-width:360px">
+          <b>LifeOS skills + OpenUI context</b>
+          <small>mounted into every agent · openclaw-os renders the UI</small>
         </div>
       </div>
     </div>

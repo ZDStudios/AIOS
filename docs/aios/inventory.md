@@ -107,3 +107,42 @@ and/or `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`). LifeOS skills are copied/linked in
 hermes and openclaw are both multi-channel gateways. They stay separate services on separate ports
 (9119 vs 18789), each toggleable in `aios.config.yaml`. Default division of labor: **openclaw = channels +
 dashboard**, **hermes = autonomous jobs + memory + cron**. opencode = coding engine both can call at :4096.
+
+---
+
+## 6. CrewAI — multi-agent orchestration (5th agent)
+
+| Field | Value | Source |
+|---|---|---|
+| Root | `crewAI-main/crewAI-main` (uv workspace `crewai-workspace`) | fs |
+| Runtime / PM | Python `>=3.10,<3.14` via **uv** | `pyproject.toml` |
+| Package | `crewai` (`lib/crewai`), CLI `crewai_cli.cli:crewai` | `lib/*/pyproject.toml` |
+| Install | `uv sync --package crewai` (avoids heavy optional extras) | aios |
+| Runs as | `services/crewai_service.py` via `uv run --project crewAI-main/crewAI-main python …` | aios |
+| Port | **4788** (`/chat`, `/health`) | aios |
+| Interconnect | `ask_peer` tool → hub `POST /api/relay` to reach opencode/hermes/brain | `services/crewai_service.py` |
+| Model | litellm string from `AIOS_DEFAULT_MODEL` + provider (e.g. `openrouter/…`) | service |
+
+## 7. AIOS Hub — the Control Room + interconnect
+
+| Field | Value | Source |
+|---|---|---|
+| File | `aios_hub.py` (Python stdlib, `http.server`) | this repo |
+| Port | **8787** | aios |
+| Serves | `docs/dashboard.html` at `/`; `GET /api/services`, `/api/peers`, `/health`; `POST /api/chat`, `/api/relay` | `aios_hub.py` |
+| Chat targets | `brain` (direct LLM), `crewai` (service), `opencode` (`opencode run` CLI), `all` (broadcast) | `aios_hub.py` |
+| Interconnect | every service gets `AIOS_*_URL` env; `/api/relay` routes agent→agent | `aios.py interconnect_env` |
+
+## Updated wiring
+
+| Service | Port | Health | Notes |
+|---|---|---|---|
+| opencode | 4096 | `/` | coding engine |
+| hermes | 9119 | `/` | autonomous + dashboard |
+| openclaw | 18789 | `/` | channels; hosts openclaw-os plugin |
+| crewai | 4788 | `/health` | multi-agent crews |
+| **hub** | **8787** | `/health` | **Control Room — front door** |
+| openclaw-os | 18789/plugins/openclawos/ | — | openclaw's dashboard (embedded in the hub) |
+
+**Front door is now the AIOS Hub (`:8787`).** openclaw-os is openclaw's dashboard (a plugin), embedded
+as a tab in the Control Room — not a standalone agent. OpenUI context is mounted into every agent.

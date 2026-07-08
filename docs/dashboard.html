@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The AI OS — Control Room</title>
+<style>
+  :root{
+    --bg:#07080d;--panel:#0e1019;--panel2:#12141f;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.16);
+    --tx:#e8eaf2;--mut:#9aa0b4;--dim:#6b7189;--violet:#8b5cf6;--cyan:#06b6d4;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;
+    --grad:linear-gradient(120deg,#8b5cf6,#6366f1 45%,#06b6d4);
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace;--sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--tx);font-family:var(--sans);display:flex;flex-direction:column;overflow:hidden}
+  a{color:var(--violet);text-decoration:none}
+  .mono{font-family:var(--mono)}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--line);background:rgba(10,11,17,.8);backdrop-filter:blur(10px)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.02em}
+  .brand .logo{width:30px;height:30px;border-radius:8px;background:var(--grad);display:grid;place-items:center;font-size:16px}
+  .brand small{color:var(--mut);font-weight:500;font-size:.78rem;margin-left:4px}
+  .tabs{display:flex;gap:6px}
+  .tabs button{font-family:var(--sans);font-size:.85rem;font-weight:600;color:var(--mut);background:transparent;border:1px solid transparent;padding:7px 14px;border-radius:9px;cursor:pointer;transition:all .15s}
+  .tabs button:hover{color:var(--tx);background:rgba(255,255,255,.04)}
+  .tabs button.active{color:var(--tx);background:rgba(139,92,246,.14);border-color:rgba(139,92,246,.4)}
+
+  main{flex:1;display:flex;min-height:0}
+  aside{width:262px;border-right:1px solid var(--line);background:var(--panel);padding:16px;overflow-y:auto;flex-shrink:0}
+  .side-h{font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:6px 4px 12px}
+  .svc{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);margin-bottom:8px;cursor:pointer;transition:all .15s}
+  .svc:hover{border-color:var(--line2)}
+  .svc.sel{border-color:rgba(139,92,246,.6);background:rgba(139,92,246,.1)}
+  .svc .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex-shrink:0}
+  .svc.up .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .svc .nm{font-weight:650;font-size:.92rem}
+  .svc .rl{color:var(--mut);font-size:.76rem}
+  .svc .meta{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:var(--dim)}
+
+  .content{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+  .view{position:absolute;inset:0;display:none;flex-direction:column}
+  .view.active{display:flex}
+
+  /* chat */
+  #chat .msgs{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
+  .msg{max-width:820px;display:flex;gap:12px}
+  .msg .av{width:30px;height:30px;border-radius:8px;flex-shrink:0;display:grid;place-items:center;font-size:14px;font-weight:700}
+  .msg.user{align-self:flex-end;flex-direction:row-reverse}
+  .msg.user .av{background:var(--grad);color:#fff}
+  .msg.bot .av{background:var(--panel2);border:1px solid var(--line2)}
+  .msg .bubble{padding:12px 16px;border-radius:13px;line-height:1.6;font-size:.94rem;white-space:pre-wrap;word-break:break-word}
+  .msg.user .bubble{background:rgba(139,92,246,.16);border:1px solid rgba(139,92,246,.3)}
+  .msg.bot .bubble{background:var(--panel);border:1px solid var(--line)}
+  .msg .who{font-size:.7rem;color:var(--dim);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+  .msg .bubble code{font-family:var(--mono);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;font-size:.85em}
+  .composer{border-top:1px solid var(--line);padding:14px 18px;background:var(--panel)}
+  .targets{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .targets button{font-family:var(--sans);font-size:.8rem;font-weight:600;color:var(--mut);background:var(--panel2);border:1px solid var(--line);padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
+  .targets button.active{color:var(--tx);border-color:rgba(139,92,246,.6);background:rgba(139,92,246,.12)}
+  .inrow{display:flex;gap:10px;align-items:flex-end}
+  textarea{flex:1;resize:none;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;color:var(--tx);font-family:var(--sans);font-size:.95rem;padding:12px 14px;max-height:160px;min-height:48px;line-height:1.5}
+  textarea:focus{outline:none;border-color:rgba(139,92,246,.6)}
+  .send{background:var(--grad);color:#fff;border:0;border-radius:12px;padding:0 22px;height:48px;font-weight:700;cursor:pointer;font-size:.95rem;transition:transform .15s}
+  .send:hover{transform:translateY(-1px)}
+  .send:disabled{opacity:.5;cursor:not-allowed}
+  .hint{color:var(--dim);font-size:.74rem;margin-top:8px}
+
+  /* embed / status */
+  .embed{flex:1;position:relative;background:#000}
+  .embed iframe{width:100%;height:100%;border:0}
+  .embed .fallback{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);padding:30px}
+  #status .wrap{padding:26px;overflow-y:auto}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:8px}
+  .stat{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--panel)}
+  .stat .t{display:flex;align-items:center;gap:9px;font-weight:700}
+  .stat .u{font-family:var(--mono);font-size:.78rem;color:var(--cyan);margin-top:8px;word-break:break-all}
+  .badge{font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:999px;margin-left:auto}
+  .badge.up{background:rgba(34,197,94,.16);color:#4ade80}
+  .badge.down{background:rgba(239,68,68,.16);color:#f87171}
+  .spin{width:14px;height:14px;border:2px solid var(--line2);border-top-color:var(--violet);border-radius:50%;animation:s .7s linear infinite;display:inline-block}
+  @keyframes s{to{transform:rotate(360deg)}}
+  @media(max-width:760px){aside{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">🧠</span> The AI OS <small>Control Room</small></div>
+  <div class="tabs">
+    <button class="active" data-view="chat" onclick="show('chat')">💬 Chat</button>
+    <button data-view="hermes" onclick="show('hermes')">☤ hermes</button>
+    <button data-view="openclawos" onclick="show('openclawos')">🪟 openclaw-os</button>
+    <button data-view="status" onclick="show('status')">📊 Status</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="side-h">Agents</div>
+    <div id="svclist"></div>
+    <div class="side-h" style="margin-top:20px">Talk to</div>
+    <div style="color:var(--mut);font-size:.8rem;line-height:1.5;padding:0 4px">
+      Pick a target below the chat box. <b>All</b> broadcasts to every agent. Agents can reach
+      each other through the hub.
+    </div>
+  </aside>
+
+  <div class="content">
+    <!-- CHAT -->
+    <div id="chat" class="view active">
+      <div class="msgs" id="msgs">
+        <div class="msg bot"><div class="av">🧠</div><div><div class="who">AIOS Brain</div>
+          <div class="bubble">Welcome to <b>The AI OS Control Room</b>. Ask me anything, or pick a target below — <b>Brain</b> (orchestrator), <b>CrewAI</b> (multi-agent crews), <b>opencode</b> (coding), or <b>All</b> to broadcast. The agents can call each other through the hub.</div></div></div>
+      </div>
+      <div class="composer">
+        <div class="targets" id="targets">
+          <button class="active" data-t="brain">🧠 Brain</button>
+          <button data-t="crewai">👥 CrewAI</button>
+          <button data-t="opencode">⌨️ opencode</button>
+          <button data-t="all">🌐 All</button>
+        </div>
+        <div class="inrow">
+          <textarea id="input" placeholder="Message The AI OS…  (Enter to send, Shift+Enter for newline)"></textarea>
+          <button class="send" id="send" onclick="send()">Send</button>
+        </div>
+        <div class="hint" id="hint">Target: <b id="curT">brain</b> · hub at <span class="mono" id="huburl">/</span></div>
+      </div>
+    </div>
+
+    <!-- HERMES -->
+    <div id="hermes" class="view"><div class="embed">
+      <iframe id="hermesFrame" title="hermes"></iframe>
+      <div class="fallback" id="hermesFb" style="display:none">hermes dashboard can't be embedded. <a id="hermesLink" target="_blank">Open it in a new tab →</a></div>
+    </div></div>
+
+    <!-- OPENCLAW-OS -->
+    <div id="openclawos" class="view"><div class="embed">
+      <iframe id="osFrame" title="openclaw-os"></iframe>
+      <div class="fallback" id="osFb" style="display:none">openclaw-os dashboard can't be embedded. <a id="osLink" target="_blank">Open it in a new tab →</a></div>
+    </div></div>
+
+    <!-- STATUS -->
+    <div id="status" class="view"><div class="wrap">
+      <h2 style="font-weight:800;letter-spacing:-.02em">System status</h2>
+      <p style="color:var(--mut);margin-top:6px">Live health of every service in The AI OS.</p>
+      <div class="stat-grid" id="statgrid"></div>
+    </div></div>
+  </div>
+</main>
+
+<script>
+  const ROLES={
+    "opencode":"coding engine","hermes":"autonomous agent","openclaw":"channel gateway",
+    "crewai":"multi-agent crews","openclaw-os":"dashboard","hub":"brain + interconnect"
+  };
+  const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥","openclaw-os":"🪟",hub:"🧠"};
+  let target="brain", peers={}, history=[];
+
+  function show(v){
+    document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v));
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+    if(v==='hermes')loadFrame('hermesFrame','hermesFb','hermesLink',peers.hermes);
+    if(v==='openclawos')loadFrame('osFrame','osFb','osLink',peers['openclaw-os']);
+  }
+  function loadFrame(fid,fbid,linkid,url){
+    if(!url)return;const f=document.getElementById(fid);
+    document.getElementById(linkid).href=url;
+    if(f.dataset.loaded)return;f.src=url;f.dataset.loaded='1';
+    setTimeout(()=>{try{if(!f.contentWindow||!f.contentDocument&&f.contentWindow.length===0){}}catch(e){document.getElementById(fbid).style.display='grid';}},2500);
+  }
+
+  document.getElementById('targets').addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b)return;
+    target=b.dataset.t;document.getElementById('curT').textContent=target;
+    document.querySelectorAll('#targets button').forEach(x=>x.classList.toggle('active',x===b));
+  });
+
+  const input=document.getElementById('input');
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+  input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,160)+'px';});
+
+  function addMsg(who,text,cls,icon){
+    const m=document.createElement('div');m.className='msg '+cls;
+    m.innerHTML=`<div class="av">${icon}</div><div><div class="who">${who}</div><div class="bubble"></div></div>`;
+    m.querySelector('.bubble').textContent=text;
+    const box=document.getElementById('msgs');box.appendChild(m);box.scrollTop=box.scrollHeight;return m;
+  }
+  async function send(){
+    const text=input.value.trim();if(!text)return;
+    input.value='';input.style.height='48px';
+    addMsg('you',text,'user','🧑');
+    const icon=ICON[target]||'🧠';
+    const holder=addMsg(target,'',' bot','<span class="spin"></span>');
+    document.getElementById('send').disabled=true;
+    try{
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({target,message:text,history})});
+      const d=await r.json();
+      holder.querySelector('.av').textContent=icon;
+      holder.querySelector('.bubble').textContent=d.reply||'(no reply)';
+      history.push({role:'user',content:text});history.push({role:'assistant',content:(d.reply||'').slice(0,4000)});
+      if(history.length>12)history=history.slice(-12);
+    }catch(e){
+      holder.querySelector('.av').textContent='⚠️';
+      holder.querySelector('.bubble').textContent='Hub unreachable: '+e;
+    }
+    document.getElementById('send').disabled=false;
+    document.getElementById('msgs').scrollTop=1e9;
+  }
+
+  async function refresh(){
+    try{
+      const s=await (await fetch('/api/services')).json();
+      peers=Object.fromEntries(Object.entries(s).map(([k,v])=>[k,v.url]));
+      // sidebar
+      const order=["hub","opencode","hermes","openclaw","crewai","openclaw-os"];
+      document.getElementById('svclist').innerHTML=order.filter(k=>s[k]).map(k=>`
+        <div class="svc ${s[k].up?'up':''}"><span class="dot"></span>
+          <div><div class="nm">${ICON[k]||''} ${k}</div><div class="rl">${ROLES[k]||''}</div></div>
+          <span class="meta">${s[k].up?'live':'down'}</span></div>`).join('');
+      // status grid
+      document.getElementById('statgrid').innerHTML=order.filter(k=>s[k]).map(k=>`
+        <div class="stat"><div class="t">${ICON[k]||''} ${k}
+          <span class="badge ${s[k].up?'up':'down'}">${s[k].up?'UP':'DOWN'}</span></div>
+          <div class="u">${s[k].url}</div></div>`).join('');
+      document.getElementById('huburl').textContent=(s.hub&&s.hub.url)||'/';
+    }catch(e){}
+  }
+  refresh();setInterval(refresh,5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "Tell me a short fact"}]}],
+      "inferenceConfig": {"maxTokens": 100, "temperature": 0.7}}'
+    headers:
+      Content-Length:
+      - '138'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - X-USER-AGENT-XXX
+      accept-encoding:
+      - ACCEPT-ENCODING-XXX
+      amz-sdk-invocation-id:
+      - AMZ-SDK-INVOCATION-ID-XXX
+      amz-sdk-request:
+      - attempt=1
+      authorization:
+      - AUTHORIZATION-XXX
+      x-amz-date:
+      - X-AMZ-DATE-XXX
+      x-amz-security-token:
+      - X-AMZ-SECURITY-TOKEN-XXX
+    method: POST
+    uri: https://bedrock-runtime.us-west-2.amazonaws.com/model/us.anthropic.claude-sonnet-4-6/converse
+  response:
+    body:
+      string: "{\"metrics\":{\"latencyMs\":2721},\"output\":{\"message\":{\"content\":[{\"text\":\"Here's
+        a short fact:\\n\\n**Honey never spoils.** Archaeologists have found 3,000-year-old
+        honey in Egyptian tombs that was still perfectly edible. \U0001F36F\"}],\"role\":\"assistant\"}},\"stopReason\":\"end_turn\",\"usage\":{\"cacheReadInputTokenCount\":0,\"cacheReadInputTokens\":0,\"cacheWriteInputTokenCount\":0,\"cacheWriteInputTokens\":0,\"inputTokens\":12,\"outputTokens\":47,\"serverToolUsage\":{},\"totalTokens\":59}}"
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '463'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 May 2026 17:06:27 GMT
+      x-amzn-RequestId:
+      - X-AMZN-REQUESTID-XXX
+    status:
+      code: 200
+      message: OK
+version: 1
