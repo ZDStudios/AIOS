@@ -274,7 +274,8 @@ def find_tool(name: str) -> str | None:
     extra = {
         "bun": [home / ".bun/bin/bun.exe", home / ".bun/bin/bun"],
         "uv": [home / ".local/bin/uv.exe", home / ".local/bin/uv", home / ".cargo/bin/uv"],
-        "pnpm": [home / "AppData/Roaming/npm/pnpm.cmd", home / ".local/share/pnpm/pnpm.exe"],
+        "pnpm": [home / "AppData/Roaming/npm/pnpm.cmd", home / ".local/share/pnpm/pnpm.exe",
+                 home / ".local/share/pnpm/pnpm"],
     }
     for cand in extra.get(name, []):
         if Path(cand).exists():

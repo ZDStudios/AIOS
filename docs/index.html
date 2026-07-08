@@ -58,6 +58,18 @@
   .chip{font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--mut)}
   .chip b{color:var(--tx)}
 
+  /* ── install one-liner ── */
+  .os-tabs{display:flex;gap:8px;justify-content:center;margin-top:38px}
+  .os-tabs button{font-family:var(--sans);font-size:.82rem;font-weight:600;color:var(--mut);background:var(--panel);border:1px solid var(--line);padding:7px 15px;border-radius:9px;cursor:pointer;transition:all .2s}
+  .os-tabs button.active{color:var(--tx);border-color:rgba(139,92,246,.6);background:rgba(139,92,246,.1)}
+  .install{max-width:660px;margin:14px auto 0;display:flex;align-items:center;gap:10px;background:#0a0b12;border:1px solid var(--line2);border-radius:12px;padding:7px 7px 7px 18px;text-align:left}
+  .install .pfx{color:var(--violet);font-family:var(--mono);font-weight:700}
+  .install code{flex:1;color:#dfe3f2;font-family:var(--mono);font-size:.85rem;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+  .install code::-webkit-scrollbar{display:none}
+  .install button{border:0;background:var(--grad);color:#fff;font-weight:600;font-size:.8rem;padding:9px 16px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:opacity .2s,transform .15s}
+  .install button:hover{opacity:.92;transform:translateY(-1px)}
+  @media(max-width:560px){.install code{font-size:.72rem}}
+
   /* ── terminal ── */
   .term{max-width:640px;margin:44px auto 0;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#0d0f18,#0a0b12);box-shadow:0 30px 80px rgba(0,0,0,.5);text-align:left}
   .term-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
@@ -162,6 +174,17 @@
       <a class="btn btn-primary" href="#quickstart">Get started →</a>
       <a class="btn btn-ghost" href="https://github.com/ZDStudios/AIOS" target="_blank" rel="noopener">View on GitHub</a>
     </div>
+
+    <div class="os-tabs">
+      <button class="active" data-os="nix" onclick="setOS('nix')">🐧 Linux / macOS</button>
+      <button data-os="win" onclick="setOS('win')">🪟 Windows</button>
+    </div>
+    <div class="install">
+      <span class="pfx">$</span>
+      <code id="installcmd">curl -fsSL https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.sh | bash</code>
+      <button onclick="copyInstall(this)">Copy</button>
+    </div>
+
     <div class="chips">
       <span class="chip"><b>1</b> control script</span>
       <span class="chip"><b>1</b> config</span>
@@ -280,20 +303,25 @@
     <div class="eyebrow reveal">60 seconds</div>
     <h2 class="reveal">Quickstart</h2>
     <div class="steps">
-      <div class="step reveal"><div class="n">1</div><h4>Setup</h4><p>Installs toolchains + deps, creates <code>.env</code>, renders config, builds, wires the dashboard, mounts skills.</p></div>
-      <div class="step reveal"><div class="n">2</div><h4>Add your key</h4><p>The wizard asks for your model provider and API key — one key powers all four agents.</p></div>
+      <div class="step reveal"><div class="n">1</div><h4>One-line install</h4><p>Clones the repo, installs toolchains + every project's deps, builds, and wires the dashboard.</p></div>
+      <div class="step reveal"><div class="n">2</div><h4>Add your key</h4><p>Run <code>aios setup --force</code> — one provider key powers all four agents.</p></div>
       <div class="step reveal"><div class="n">3</div><h4>Start</h4><p>Brings every service up with health checks, then <code>aios url</code> opens the dashboard.</p></div>
     </div>
     <div class="codeblock reveal">
-      <div class="h">PowerShell — Windows</div>
-<pre><span class="c"># from the "The AI OS" folder</span>
-.\aios.ps1 setup      <span class="c"># install + configure + wire everything</span>
-.\aios.ps1 start      <span class="g"># ✓ opencode  ✓ hermes  ✓ openclaw</span>
-.\aios.ps1 url        <span class="c"># open the dashboard</span></pre>
+      <div class="h">One-line install — Linux / macOS / WSL</div>
+<pre><span class="c"># clones, installs toolchains + deps, builds, wires everything</span>
+curl -fsSL https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.sh | bash</pre>
     </div>
     <div class="codeblock reveal">
-      <div class="h">Bash — macOS / Linux / WSL</div>
-<pre>./aios setup &amp;&amp; ./aios start &amp;&amp; ./aios url</pre>
+      <div class="h">One-line install — Windows (PowerShell)</div>
+<pre>irm https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.ps1 | iex</pre>
+    </div>
+    <div class="codeblock reveal">
+      <div class="h">Then — add your key &amp; launch</div>
+<pre>cd ~/AIOS
+./aios setup --force   <span class="c"># enter provider + API key</span>
+./aios start           <span class="g"># ✓ opencode  ✓ hermes  ✓ openclaw</span>
+./aios url             <span class="c"># open the dashboard</span></pre>
     </div>
   </div>
 </section>
@@ -336,6 +364,21 @@
 <script>
   const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
   document.querySelectorAll('.reveal').forEach((el,i)=>{el.style.transitionDelay=(i%4*60)+'ms';io.observe(el)});
+
+  const CMDS={
+    nix:'curl -fsSL https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.sh | bash',
+    win:'irm https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.ps1 | iex'
+  };
+  function setOS(os){
+    document.getElementById('installcmd').textContent=CMDS[os];
+    document.querySelectorAll('.os-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.os===os));
+  }
+  function copyInstall(btn){
+    const txt=document.getElementById('installcmd').textContent;
+    const done=()=>{const t=btn.textContent;btn.textContent='Copied!';setTimeout(()=>btn.textContent=t,1400);};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(done);}
+    else{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}ta.remove();done();}
+  }
 </script>
 </body>
 </html>

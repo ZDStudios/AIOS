@@ -63,23 +63,46 @@ aios setup   →   aios start   →   aios url
 | **openclaw-os** | The dashboard / front door (served inside openclaw) | `18789/plugins/openclawos/` | [thesys](https://github.com/thesysdev/openclaw-os) |
 | **LifeOS** | Shared identity + skills mounted into the agents | — | [danielmiessler/LifeOS](https://github.com/danielmiessler/LifeOS) |
 
-## 🚀 60-second quickstart
+## ⚡ Install (one line)
+
+**Linux / macOS / WSL:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.sh | bash
+```
 
 **Windows (PowerShell):**
 
 ```powershell
-cd "The AI OS"
-
-.\aios.ps1 setup      # install toolchains + deps, create .env, render config, build, wire
-#   → the wizard asks for your model provider + API key
-
-.\aios.ps1 start      # bring up all services
-.\aios.ps1 url        # print the dashboard URL and open it
+irm https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.ps1 | iex
 ```
 
-**macOS / Linux / WSL / Git Bash:**
+The installer clones the repo to `~/AIOS`, installs the toolchains (**uv, bun, pnpm, Node**),
+and runs `aios setup` — installing every project's deps, building, and wiring the dashboard.
+Then finish setup with your key:
 
 ```bash
+cd ~/AIOS
+./aios setup --force     # enter your model provider + API key
+./aios start             # bring the whole stack up
+./aios url               # open the dashboard
+```
+
+> Override the target dir with `AIOS_DIR=/path`. Set `AIOS_NO_SETUP=1` to clone only.
+
+## 🚀 Already have the folder?
+
+If you already downloaded The AI OS, skip the installer and run it directly:
+
+```powershell
+# Windows (PowerShell)
+.\aios.ps1 setup      # install toolchains + deps, create .env, render config, build, wire
+.\aios.ps1 start      # bring up all services
+.\aios.ps1 url        # print + open the dashboard URL
+```
+
+```bash
+# macOS / Linux / WSL / Git Bash
 ./aios setup && ./aios start && ./aios url
 ```
 
