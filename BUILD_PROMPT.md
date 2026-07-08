@@ -5,7 +5,7 @@
 
 ---
 
-## ROLE
+## ROL
 
 You are a senior platform engineer. Inside this directory sit five independent open‑source
 AI projects that were downloaded separately. Your job is to **integrate them into one coherent,
