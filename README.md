@@ -157,11 +157,14 @@ Plus two integrations that glue it together:
 | `aios url` | Print the Control Room + service URLs. |
 
 **In the Control Room** (`http://127.0.0.1:8787/`) you can:
-- **Chat** with any agent (Brain, CrewAI, opencode, claude-code) or broadcast to **All**; agents reach each other via the hub.
-- **Open openclaw's full control plane inside the hub** — channels, **connectors**, model providers, **MCP servers**, skills, plugins, **automations/cron**, and sessions — embedded via a frame-stripping proxy (openclaw normally blocks embedding).
+- **Chat** with any agent (Brain, CrewAI, opencode, claude-code) or broadcast to **All**.
+- **✦ Team** — one assistant that orchestrates the whole team: the Brain plans, delegates subtasks to the specialist agents, and synthesizes one answer (the practical "merge").
+- **Configure openclaw AND hermes fully inside the hub** — both control-UIs are embedded via frame-stripping proxies, so you get channels, **connectors**, model providers, **MCP servers**, skills, plugins, **automations/cron**, and sessions right in the hub (they normally block embedding).
 - **Automations** — schedule prompts to run against any agent every N minutes (daily digests, checks).
 - **Settings** — edit provider/key/model, channel tokens, and `aios.config.yaml`; it re-renders into every agent, no terminal needed.
 - **Themes** — Light, Dark, Midnight, Slate, Rose.
+
+**Auto-updates:** `aios start` now auto-runs `git pull` + reinstalls changed deps when the repo has updates (`updates.auto_update: true`). Turn it off in `aios.config.yaml`.
 
 ## ⚙️ Configuration
 

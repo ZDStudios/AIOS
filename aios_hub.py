@@ -91,6 +91,7 @@ PEERS = {
 }
 CLAUDECODE = os.environ.get("AIOS_CLAUDECODE_URL", "http://127.0.0.1:8000").rstrip("/")
 OPENCLAW_EMBED = os.environ.get("AIOS_OPENCLAWPROXY_URL", "http://127.0.0.1:8791/")
+HERMES_EMBED = os.environ.get("AIOS_HERMESPROXY_URL", "http://127.0.0.1:8792/")
 SCHEDULES_FILE = ROOT / ".aios" / "schedules.json"
 
 
@@ -195,12 +196,62 @@ def route(target: str, message: str, history: list | None = None) -> str:
         return ask_opencode(message)
     if target in ("claudecode", "claude-code"):
         return ask_claudecode(message, history)
+    if target in ("team", "auto", "merge"):
+        return run_team(message, history)
     if target == "all":
         parts = []
         for t in ("brain", "crewai", "opencode", "claudecode"):
             parts.append(f"### {t}\n{route(t, message, history)}")
         return "\n\n".join(parts)
-    return f"⚠️ Unknown target '{target}'. Use brain | crewai | opencode | claudecode | all."
+    return f"⚠️ Unknown target '{target}'. Use brain | team | crewai | opencode | claudecode | all."
+
+
+# --------------------------------------------------------------------------- #
+# "Team" — a single agent that orchestrates the others (the practical merge)   #
+# --------------------------------------------------------------------------- #
+AGENT_TOOLS = {
+    "opencode": "writing/editing/running code, repos, technical build tasks",
+    "crewai": "multi-step research or workflows that benefit from a crew of roles",
+    "claudecode": "Claude Code — coding with the Claude Code CLI",
+}
+
+
+def run_team(message: str, history: list | None = None) -> str:
+    """One agent, backed by the whole team: the Brain plans, delegates subtasks to
+    the specialist agents, then synthesizes one answer. Delegation format the model
+    emits: lines like `CALL opencode: <subtask>` (or `ANSWER: ...` to reply directly)."""
+    roster = "\n".join(f"- {k}: {v}" for k, v in AGENT_TOOLS.items())
+    plan_sys = (
+        "You are The AI OS — one assistant backed by a team of specialist agents. "
+        "Decide how to handle the user's request. You may delegate subtasks to agents by writing "
+        "one directive per line in the form `CALL <agent>: <subtask>`. Available agents:\n" + roster +
+        "\nIf you can answer directly with no agent, write `ANSWER: <your answer>`. "
+        "Only delegate when it genuinely helps. Output directives only.")
+    plan = llm_chat((history or []) + [{"role": "user", "content": message}], system=plan_sys)
+    if plan.lstrip().upper().startswith("ANSWER:"):
+        return plan.split(":", 1)[1].strip()
+
+    calls = []
+    for line in plan.splitlines():
+        s = line.strip()
+        if s.upper().startswith("CALL "):
+            body = s[5:]
+            agent, _, sub = body.partition(":")
+            agent = agent.strip().lower()
+            if agent in AGENT_TOOLS and sub.strip():
+                calls.append((agent, sub.strip()))
+    if not calls:
+        # model didn't delegate cleanly — just answer as the Brain
+        return route("brain", message, history)
+
+    results = []
+    for agent, sub in calls[:3]:  # cap fan-out
+        results.append(f"[{agent}] {sub}\n{route(agent, sub)}")
+    synth_sys = ("You are The AI OS. Synthesize a single, clear answer to the user's request from the "
+                 "agent results below. Don't mention the internal delegation unless useful.")
+    joined = "\n\n".join(results)
+    return llm_chat([{"role": "user", "content": f"Request: {message}\n\nAgent results:\n{joined}"}],
+                    system=synth_sys)
 
 
 # --------------------------------------------------------------------------- #
@@ -306,7 +357,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/services":
             self._send(200, services_status())
         elif self.path == "/api/peers":
-            self._send(200, {**PEERS, "openclaw-embed": OPENCLAW_EMBED})
+            self._send(200, {**PEERS, "openclaw-embed": OPENCLAW_EMBED, "hermes-embed": HERMES_EMBED})
         elif self.path == "/api/schedules":
             self._send(200, load_schedules())
         elif self.path == "/api/config":

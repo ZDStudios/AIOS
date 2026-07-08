@@ -177,11 +177,12 @@
     <div id="chat" class="view active">
       <div class="msgs" id="msgs">
         <div class="msg"><div class="av">◆</div><div><div class="who">AIOS Brain</div>
-          <div class="bubble">Welcome to your <b>AI OS workspace</b>. Ask anything, or pick a target below — <b>Brain</b> (orchestrator), <b>CrewAI</b> (crews), <b>opencode</b> (coding), or <b>All</b>. Open any agent in the sidebar to use its own panel, or head to <b>Settings</b> to configure everything.</div></div></div>
+          <div class="bubble">Welcome to your <b>AI OS workspace</b>. Ask anything, or pick a target below — <b>Brain</b> (orchestrator), <b>✦ Team</b> (one assistant that delegates to all the others), <b>CrewAI</b>, <b>opencode</b>, <b>claude-code</b>, or <b>All</b>. Open <b>hermes</b> or <b>openclaw</b> in the sidebar to configure them fully inside the hub — channels, connectors, providers, MCP, skills, cron.</div></div></div>
       </div>
       <div class="composer">
         <div class="targets" id="targets">
           <button class="chip active" data-t="brain">◆ Brain</button>
+          <button class="chip" data-t="team">✦ Team</button>
           <button class="chip" data-t="crewai">👥 CrewAI</button>
           <button class="chip" data-t="opencode">⌨️ opencode</button>
           <button class="chip" data-t="claudecode">◈ claude-code</button>
@@ -195,7 +196,7 @@
     </div>
 
     <!-- IFRAME AGENTS -->
-    <div id="hermes" class="view"><div class="vhead"><h2>☤ hermes</h2><span class="sub">autonomous agent · dashboard</span><div class="right"><button class="btn sm" onclick="act('restart','hermes')">↻ Restart</button><a class="btn sm" id="hermesNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="hermesFrame"></iframe></div></div>
+    <div id="hermes" class="view"><div class="vhead"><h2>☤ hermes</h2><span class="sub">autonomous agent · full dashboard &amp; settings</span><div class="right"><button class="btn sm" onclick="act('restart','hermes')">↻ Restart</button><a class="btn sm" id="hermesNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="hermesFrame"></iframe></div></div>
     <div id="openclawos" class="view"><div class="vhead"><h2>🪟 openclaw-os</h2><span class="sub">openclaw's generative-UI dashboard</span><div class="right"><a class="btn sm" id="osNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="osFrame"></iframe></div></div>
     <div id="openclaw" class="view"><div class="vhead"><h2>🦞 openclaw</h2><span class="sub">channels · connectors · providers · skills · MCP · automations · sessions</span><div class="right"><button class="btn sm" onclick="act('restart','openclaw')">↻ Restart</button><a class="btn sm" id="clawNew" target="_blank">Open ↗</a></div></div><div class="embed"><iframe id="clawFrame"></iframe></div></div>
 
@@ -266,7 +267,7 @@
 
 <script>
   const ROLES={opencode:"coding engine",hermes:"autonomous agent",openclaw:"channel gateway",crewai:"multi-agent crews",claudecode:"Claude Code API","openclaw-os":"dashboard",hub:"brain + interconnect"};
-  const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥",claudecode:"◈","openclaw-os":"🪟",hub:"◆"};
+  const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥",claudecode:"◈","openclaw-os":"🪟",hub:"◆",brain:"◆",team:"✦",all:"🌐"};
   let target="brain", peers={}, svc={}, history=[];
 
   // themes
@@ -280,7 +281,7 @@
     document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v));
     document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.v===v));
     document.querySelector('aside').classList.remove('open');
-    if(v==='hermes')frame('hermesFrame','hermesNew',peers.hermes);
+    if(v==='hermes')frame('hermesFrame','hermesNew',peers['hermes-embed']||peers.hermes);
     if(v==='openclawos')frame('osFrame','osNew',peers['openclaw-os']);
     if(v==='openclaw')frame('clawFrame','clawNew',peers['openclaw-embed']||peers.openclaw);
     if(v==='opencode')agentPanel('opencode','opencodeBody','The headless coding-agent engine. Chat with it from the Chat tab (target “opencode”) or call its HTTP API/SDK.',peers.opencode);

@@ -427,7 +427,7 @@ def service_specs(cfg: dict) -> dict:
             "health": cfg_get(cfg, "health.claudecode", f"http://127.0.0.1:{port}/health"),
             "tool": "uv",
         }
-    # Frame-stripping reverse proxy so openclaw's control-UI embeds in the hub.
+    # Frame-stripping reverse proxies so openclaw + hermes control-UIs embed in the hub.
     if cl and cfg_get(cfg, "services.openclaw_proxy.enabled", True):
         pport = int(cfg_get(cfg, "services.openclaw_proxy.port", 8791))
         oport = int(cfg_get(cfg, "services.openclaw.port", 18789))
@@ -439,6 +439,18 @@ def service_specs(cfg: dict) -> dict:
             "health": cfg_get(cfg, "health.openclaw_proxy", f"http://127.0.0.1:{pport}/"),
             "tool": "python",
             "env": {"AIOS_PROXY_PORT": str(pport), "AIOS_PROXY_TARGET": f"http://127.0.0.1:{oport}"},
+        }
+    if hm and cfg_get(cfg, "services.hermes_proxy.enabled", True):
+        pport = int(cfg_get(cfg, "services.hermes_proxy.port", 8792))
+        hp = int(cfg_get(cfg, "services.hermes.port", 9119))
+        specs["hermes-proxy"] = {
+            "enabled": True,
+            "cwd": ROOT,
+            "cmd": [sys.executable, str(ROOT / "aios_proxy.py")],
+            "port": pport,
+            "health": cfg_get(cfg, "health.hermes_proxy", f"http://127.0.0.1:{pport}/"),
+            "tool": "python",
+            "env": {"AIOS_PROXY_PORT": str(pport), "AIOS_PROXY_TARGET": f"http://127.0.0.1:{hp}"},
         }
     # The AIOS Hub — unified dashboard + interconnect. Always available (stdlib).
     hport = int(cfg_get(cfg, "services.hub.port", 8787))
@@ -458,8 +470,8 @@ def service_specs(cfg: dict) -> dict:
     return specs
 
 
-START_ORDER = ["opencode", "hermes", "hermes-gateway", "openclaw", "openclaw-proxy",
-               "crewai", "claudecode", "hub"]
+START_ORDER = ["opencode", "hermes", "hermes-gateway", "hermes-proxy", "openclaw",
+               "openclaw-proxy", "crewai", "claudecode", "hub"]
 
 
 def openclaw_env() -> dict:
@@ -477,6 +489,7 @@ def interconnect_env(cfg: dict) -> dict:
     crp = cfg_get(cfg, "services.crewai.port", 4788)
     ccp = cfg_get(cfg, "services.claudecode.port", 8000)
     pxp = cfg_get(cfg, "services.openclaw_proxy.port", 8791)
+    hxp = cfg_get(cfg, "services.hermes_proxy.port", 8792)
     hbp = cfg_get(cfg, "services.hub.port", 8787)
     return {
         "AIOS_ROOT": str(ROOT),
@@ -490,6 +503,7 @@ def interconnect_env(cfg: dict) -> dict:
         "AIOS_CREWAI_PORT": str(crp),
         "AIOS_CLAUDECODE_URL": f"http://127.0.0.1:{ccp}",
         "AIOS_OPENCLAWPROXY_URL": f"http://127.0.0.1:{pxp}/",
+        "AIOS_HERMESPROXY_URL": f"http://127.0.0.1:{hxp}/",
         "AIOS_OPENCLAWOS_URL": f"http://127.0.0.1:{clp}/plugins/openclawos/",
     }
 
@@ -1156,7 +1170,12 @@ def wire_openclaw_os(quiet=False):
 def cmd_start(args):
     cfg = load_config()
     secrets = load_env(ENV_PATH)
-    if cfg_get(cfg, "updates.check_on_start", True):
+    if cfg_get(cfg, "updates.auto_update", False):
+        if _git_pull() is True:  # new commits arrived → refresh deps/config
+            _install_all(cfg)
+            render_native(cfg, secrets)
+            cfg = load_config()
+    elif cfg_get(cfg, "updates.check_on_start", True):
         _check_updates_notice()
     if not secrets.get("AIOS_LLM_API_KEY") and not any(secrets.get(v) for v in PROVIDER_VAR.values()):
         warn("no model API key set — the stack runs, but agents need a key to answer "
@@ -1622,3 +1641,10 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         say("\ninterrupted")
         sys.exit(130)
+    except BrokenPipeError:
+        # output was piped into head/Select-Object -First etc.; not an error
+        try:
+            sys.stdout.close()
+        except Exception:
+            pass
+        sys.exit(0)
