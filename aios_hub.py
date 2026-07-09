@@ -103,6 +103,26 @@ def read_system_prompt() -> str:
         return ""
 
 
+# Chat "targets" the AIOS API exposes as OpenAI-style models.
+TARGETS = ["brain", "team", "opencode", "crewai", "claudecode", "all"]
+
+
+def _llm_key() -> str:
+    return (os.environ.get("AIOS_LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY") or "sk-aios")
+
+
+def fetch_provider_models() -> list:
+    """List the models the active provider serves (e.g. your Claude models via claude-code-api)."""
+    try:
+        req = urllib.request.Request(llm_base() + "/models",
+                                     headers={"Authorization": f"Bearer {_llm_key()}"})
+        data = json.loads(urllib.request.urlopen(req, timeout=8).read())
+        return [m.get("id") for m in data.get("data", []) if m.get("id")]
+    except Exception:
+        return []
+
+
 # --------------------------------------------------------------------------- #
 # LLM (OpenAI-compatible) — the "AIOS Brain"                                   #
 # --------------------------------------------------------------------------- #
@@ -372,6 +392,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, load_schedules())
         elif self.path == "/api/system_prompt":
             self._send(200, {"prompt": read_system_prompt()})
+        elif self.path == "/api/models":
+            self._send(200, {"models": fetch_provider_models()})
+        elif self.path in ("/v1/models", "/api/v1/models"):
+            # AIOS as an OpenAI-compatible API: its "models" are the chat targets.
+            now = int(time.time())
+            self._send(200, {"object": "list", "data": [
+                {"id": t, "object": "model", "created": now, "owned_by": "aios"} for t in TARGETS]})
         elif self.path == "/api/config":
             env = read_env_file()
             self._send(200, {
@@ -399,6 +426,20 @@ class Handler(BaseHTTPRequestHandler):
             history = payload.get("history", [])
             reply = route(target, message, history)
             self._send(200, {"target": target, "reply": reply})
+        elif self.path in ("/v1/chat/completions", "/api/v1/chat/completions"):
+            # OpenAI-compatible endpoint — POST from any OpenAI SDK / curl.
+            msgs = payload.get("messages", [])
+            user_msg = next((m.get("content", "") for m in reversed(msgs) if m.get("role") == "user"), "")
+            history = [m for m in msgs if m.get("role") in ("user", "assistant")][:-1]
+            mdl = (payload.get("target") or payload.get("model") or "brain").lower()
+            target = mdl if mdl in TARGETS else "brain"
+            reply = route(target, user_msg, history)
+            now = int(time.time())
+            self._send(200, {
+                "id": f"aios-{now}", "object": "chat.completion", "created": now,
+                "model": target, "choices": [{"index": 0, "finish_reason": "stop",
+                "message": {"role": "assistant", "content": reply}}],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}})
         elif self.path == "/api/env":
             write_env_updates(payload.get("updates", {}))
             res = run_aios("setup", "--non-interactive", "--skip-tools",

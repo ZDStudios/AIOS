@@ -115,6 +115,31 @@
   .send:hover{background:var(--accent-strong)}
   .send:disabled{opacity:.5}
 
+  /* 3-column chat (Hermes-WebUI style): conversations · transcript · workspace */
+  #chat.chat3{flex-direction:row}
+  .convs{width:236px;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;flex-shrink:0}
+  .convs .newconv{margin:12px;padding:9px;border-radius:9px;border:1px solid var(--border-strong);background:var(--elevated);color:var(--text);font-weight:650;font-size:.86rem}
+  .convs .newconv:hover{border-color:var(--accent)}
+  .convfilter{margin:0 12px 8px;padding:7px 10px;font-size:.82rem}
+  .convlist{flex:1;overflow-y:auto;padding:4px 8px 12px}
+  .convsec{font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin:12px 8px 5px}
+  .conv{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:8px;color:var(--text2);font-size:.86rem;cursor:pointer;border:1px solid transparent}
+  .conv:hover{background:var(--sunk)}
+  .conv.active{background:var(--accent-soft);color:var(--accent-strong);border-color:var(--accent-soft2)}
+  .conv .ct{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conv .pin{opacity:.5;font-size:.78rem}
+  .conv .pin.on{opacity:1;color:var(--accent)}
+  .chatmain{flex:1;display:flex;flex-direction:column;min-width:0}
+  .workspace{width:250px;border-left:1px solid var(--border);background:var(--surface);overflow-y:auto;flex-shrink:0;padding:12px}
+  .ws-h{font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin:6px 6px 10px}
+  .ws-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--elevated);margin-bottom:7px;cursor:pointer;font-size:.85rem}
+  .ws-item:hover{border-color:var(--border-strong)}
+  .ws-item .dot{width:8px;height:8px;border-radius:50%;background:var(--text3)}
+  .ws-item.up .dot{background:var(--success)}
+  .ws-item .nm{font-weight:600}.ws-item .rl{color:var(--text3);font-size:.75rem;margin-left:auto}
+  @media(max-width:1100px){.workspace{display:none}}
+  @media(max-width:820px){.convs{display:none}}
+
   /* embeds */
   .embed{flex:1;position:relative;background:var(--sunk)}
   .embed iframe{width:100%;height:100%;border:0;background:#fff}
@@ -179,25 +204,33 @@
   </aside>
 
   <div class="content">
-    <!-- CHAT -->
-    <div id="chat" class="view active">
-      <div class="msgs" id="msgs">
-        <div class="msg"><div class="av">◆</div><div><div class="who">AIOS Brain</div>
-          <div class="bubble">Welcome to your <b>AI OS workspace</b>. Ask anything, or pick a target below — <b>Brain</b> (orchestrator), <b>✦ Team</b> (one assistant that delegates to all the others), <b>CrewAI</b>, <b>opencode</b>, <b>claude-code</b>, or <b>All</b>. Open <b>hermes</b> or <b>openclaw</b> in the sidebar to configure them fully inside the hub — channels, connectors, providers, MCP, skills, cron.</div></div></div>
+    <!-- CHAT (3-column) -->
+    <div id="chat" class="view active chat3">
+      <div class="convs">
+        <button class="newconv" onclick="newConv()">＋ New conversation</button>
+        <input class="convfilter" id="convFilter" placeholder="Filter conversations…" oninput="renderConvs()">
+        <div class="convlist" id="convList"></div>
       </div>
-      <div class="composer">
-        <div class="targets" id="targets">
-          <button class="chip active" data-t="brain">◆ Brain</button>
-          <button class="chip" data-t="team">✦ Team</button>
-          <button class="chip" data-t="crewai">👥 CrewAI</button>
-          <button class="chip" data-t="opencode">⌨️ opencode</button>
-          <button class="chip" data-t="claudecode">◈ claude-code</button>
-          <button class="chip" data-t="all">🌐 All</button>
+      <div class="chatmain">
+        <div class="msgs" id="msgs"></div>
+        <div class="composer">
+          <div class="targets" id="targets">
+            <button class="chip active" data-t="brain">◆ Brain</button>
+            <button class="chip" data-t="team">✦ Team</button>
+            <button class="chip" data-t="crewai">👥 CrewAI</button>
+            <button class="chip" data-t="opencode">⌨️ opencode</button>
+            <button class="chip" data-t="claudecode">◈ claude-code</button>
+            <button class="chip" data-t="all">🌐 All</button>
+          </div>
+          <div class="inrow">
+            <textarea id="input" placeholder="Message The AI OS…  (Enter to send)"></textarea>
+            <button class="send" id="send" onclick="send()">Send</button>
+          </div>
         </div>
-        <div class="inrow">
-          <textarea id="input" placeholder="Message The AI OS…  (Enter to send)"></textarea>
-          <button class="send" id="send" onclick="send()">Send</button>
-        </div>
+      </div>
+      <div class="workspace">
+        <div class="ws-h">Agents &amp; services</div>
+        <div id="wsPanel"></div>
       </div>
     </div>
 
@@ -247,7 +280,10 @@
           <div class="grid2" style="margin-top:16px">
             <div class="field"><label>Provider</label>
               <select id="sProvider"><option>openrouter</option><option>anthropic</option><option>openai</option><option>gemini</option><option value="claudecode">claude (Pro/Max)</option></select></div>
-            <div class="field"><label>Default model</label><input id="sModel" placeholder="anthropic/claude-opus-4.6"></div>
+            <div class="field"><label>Default model <a onclick="loadModels()" style="cursor:pointer;font-size:.75rem">↻ fetch my models</a></label>
+              <input id="sModel" list="modelList" placeholder="anthropic/claude-opus-4.6" autocomplete="off">
+              <datalist id="modelList"></datalist>
+              <div class="hint" id="modelListHint"></div></div>
           </div>
           <div class="field"><label>API key</label><input id="sKey" type="password" placeholder="paste your key"><div class="hint" id="keyHint"></div></div>
           <div class="row"><button class="btn primary" onclick="saveModel()">Save & apply</button><span id="modelMsg" class="kv"></span></div>
@@ -308,7 +344,7 @@
     if(v==='crewai')agentPanel('crewai','crewaiBody','Role-based multi-agent crews. Chat with it from the Chat tab (target “CrewAI”). It can call the other agents via the hub.',peers.crewai);
     if(v==='claudecode')agentPanel('claudecode','claudecodeBody','Claude Code exposed as an OpenAI-compatible API. Chat with it (target “claude-code”), or point any tool at <span class="mono">'+(peers.claudecode||'http://127.0.0.1:8000')+'/v1</span>. Needs the <span class="mono">claude</span> CLI installed + authenticated.',peers.claudecode);
     if(v==='automations')loadSchedules();
-    if(v==='settings'){loadSettings();loadSysPrompt();}
+    if(v==='settings'){loadSettings();loadSysPrompt();loadModels();}
   }
   function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
   function agentPanel(key,bodyId,desc,url,external){
@@ -344,17 +380,41 @@
     t=t.replace(/\n/g,'<br>');
     return t.replace(/<br>(<\/?(?:pre|ul|li|h4)>)/g,'$1').replace(/(<\/(?:pre|ul|h4)>)<br>/g,'$1');
   }
-  function addMsg(who,text,user,icon){const m=document.createElement('div');m.className='msg'+(user?' user':'');m.innerHTML=`<div class="av">${icon}</div><div><div class="who">${who}</div><div class="bubble"></div></div>`;const bub=m.querySelector('.bubble');if(user)bub.textContent=text;else bub.innerHTML=mdRender(text);const b=document.getElementById('msgs');b.appendChild(m);b.scrollTop=b.scrollHeight;return m;}
+  // ── conversations (persisted) ──
+  let convs=[]; try{convs=JSON.parse(localStorage.aiosConvs||'[]')}catch(e){convs=[]}
+  let curId=localStorage.aiosCurConv||null;
+  function saveConvs(){localStorage.aiosConvs=JSON.stringify(convs.slice(0,100));localStorage.aiosCurConv=curId||'';}
+  function curConv(){return convs.find(c=>c.id===curId);}
+  function newConv(){const c={id:'c'+Date.now(),title:'New conversation',target:target,msgs:[],pinned:false,ts:Date.now()};convs.unshift(c);curId=c.id;saveConvs();renderConvs();renderMsgs();document.getElementById('input').focus();}
+  function loadConv(id){curId=id;const c=curConv();if(c){target=c.target||'brain';document.querySelectorAll('#targets .chip').forEach(x=>x.classList.toggle('active',x.dataset.t===target));}saveConvs();renderConvs();renderMsgs();}
+  function delConv(id,e){e.stopPropagation();convs=convs.filter(c=>c.id!==id);if(curId===id)curId=(convs[0]||{}).id||null;saveConvs();renderConvs();renderMsgs();}
+  function pinConv(id,e){e.stopPropagation();const c=convs.find(c=>c.id===id);if(c)c.pinned=!c.pinned;saveConvs();renderConvs();}
+  function renderConvs(){
+    const f=(document.getElementById('convFilter').value||'').toLowerCase();
+    const list=convs.filter(c=>!f||(c.title||'').toLowerCase().includes(f));
+    const mid=new Date();mid.setHours(0,0,0,0);
+    const pin=list.filter(c=>c.pinned),today=[],earlier=[];
+    list.filter(c=>!c.pinned).forEach(c=>((c.ts>=mid.getTime()?today:earlier).push(c)));
+    const row=c=>`<div class="conv ${c.id===curId?'active':''}" onclick="loadConv('${c.id}')"><span class="pin ${c.pinned?'on':''}" onclick="pinConv('${c.id}',event)">★</span><span class="ct">${esc(c.title||'…')}</span><span class="pin" onclick="delConv('${c.id}',event)">✕</span></div>`;
+    const sec=(t,a)=>a.length?`<div class="convsec">${t}</div>`+a.map(row).join(''):'';
+    document.getElementById('convList').innerHTML=(sec('★ Pinned',pin)+sec('Today',today)+sec('Earlier',earlier))||'<div class="convsec">No conversations yet</div>';
+  }
+  const WELCOME={role:'assistant',target:'brain',content:"### Welcome to your AI OS workspace\nAsk anything, or pick a target below — **Brain**, **✦ Team** (delegates to all agents), **CrewAI**, **opencode**, **claude-code**, or **All**.\n\nOpen **hermes** or **openclaw** in the left rail to configure them fully; use **Settings** to pick a model or connect your Claude subscription."};
+  function msgEl(role,content,tgt){const m=document.createElement('div');m.className='msg'+(role==='user'?' user':'');const icon=role==='user'?'🧑':(ICON[tgt]||'◆');const who=role==='user'?'you':(tgt||'brain');m.innerHTML=`<div class="av">${icon}</div><div><div class="who">${who}</div><div class="bubble"></div></div>`;const bub=m.querySelector('.bubble');if(role==='user')bub.textContent=content;else bub.innerHTML=mdRender(content);return m;}
+  function renderMsgs(){const box=document.getElementById('msgs');box.innerHTML='';const c=curConv();const msgs=(c&&c.msgs.length)?c.msgs:[WELCOME];msgs.forEach(m=>box.appendChild(msgEl(m.role,m.content,m.target)));box.scrollTop=box.scrollHeight;}
   async function send(){
     const text=input.value.trim();if(!text)return;input.value='';input.style.height='44px';
-    addMsg('you',text,true,'🧑');
-    const h=addMsg(target,'',false,'<span class="spin"></span>');
+    let c=curConv();if(!c){newConv();c=curConv();}
+    c.msgs.push({role:'user',content:text});c.target=target;if(!c.title||c.title==='New conversation')c.title=text.slice(0,42);c.ts=Date.now();saveConvs();renderConvs();
+    const box=document.getElementById('msgs');if(c.msgs.length===1)box.innerHTML='';box.appendChild(msgEl('user',text));
+    const h=msgEl('assistant','',target);h.querySelector('.av').innerHTML='<span class="spin"></span>';box.appendChild(h);box.scrollTop=box.scrollHeight;
     document.getElementById('send').disabled=true;
-    try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,message:text,history})});
+    const hist=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').slice(-13,-1).map(m=>({role:m.role,content:m.content}));
+    try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,message:text,history:hist})});
       const d=await r.json();h.querySelector('.av').textContent=ICON[target]||'◆';h.querySelector('.bubble').innerHTML=mdRender(d.reply||'(no reply)');
-      history.push({role:'user',content:text});history.push({role:'assistant',content:(d.reply||'').slice(0,4000)});if(history.length>12)history=history.slice(-12);
+      c.msgs.push({role:'assistant',content:d.reply||'',target});saveConvs();
     }catch(e){h.querySelector('.av').textContent='⚠️';h.querySelector('.bubble').textContent='Hub unreachable: '+e;}
-    document.getElementById('send').disabled=false;
+    document.getElementById('send').disabled=false;box.scrollTop=box.scrollHeight;
   }
 
   // settings
@@ -374,6 +434,13 @@
     document.getElementById('modelMsg').innerHTML='<span class="spin"></span> saving…';
     await fetch('/api/env',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
     document.getElementById('modelMsg').textContent='saved — restart agents to apply';document.getElementById('sKey').value='';toast('Model settings saved');loadSettings();
+  }
+  async function loadModels(){
+    const hint=document.getElementById('modelListHint');hint.innerHTML='<span class="spin"></span> fetching…';
+    try{const r=await(await fetch('/api/models')).json();const list=document.getElementById('modelList');
+      list.innerHTML=(r.models||[]).map(m=>`<option value="${m}">`).join('');
+      hint.textContent=(r.models&&r.models.length)?(r.models.length+' models — click the field to pick one'):'No models found — connect a provider / log in first.';
+    }catch(e){hint.textContent='could not fetch models';}
   }
   async function connectClaude(){
     document.getElementById('claudeMsg').innerHTML='<span class="spin"></span> connecting…';
@@ -429,9 +496,14 @@
         <div class="card" style="margin:0"><h3>${ICON[k]||''} ${k} <span class="badge ${s[k].up?'up':'down'}" style="margin-left:auto">${s[k].up?'UP':'DOWN'}</span></h3>
         <p style="font-size:.82rem">${ROLES[k]||''}</p><div class="kv" style="margin-top:10px">${s[k].url}</div>
         <div class="row">${k!=='hub'&&k!=='openclaw-os'?`<button class="btn sm" onclick="act('restart','${k}')">↻</button><button class="btn sm danger" onclick="act('stop','${k}')">■</button>`:''}</div></div>`).join('');
+      // right workspace panel (chat view)
+      const nvmap={'openclaw-os':'openclawos'};
+      document.getElementById('wsPanel').innerHTML=order.filter(k=>s[k]&&k!=='hub').map(k=>`
+        <div class="ws-item ${s[k].up?'up':''}" onclick="nav('${nvmap[k]||k}')"><span class="dot"></span><span class="nm">${ICON[k]||''} ${k}</span><span class="rl">${s[k].up?'live':'off'}</span></div>`).join('');
     }catch(e){}
   }
   refresh();setInterval(refresh,5000);
+  renderConvs();renderMsgs();
   if(innerWidth<=760)document.getElementById('menuBtn').style.display='grid';
 </script>
 </body>
