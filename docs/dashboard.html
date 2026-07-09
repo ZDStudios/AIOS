@@ -280,9 +280,9 @@
           <div class="grid2" style="margin-top:16px">
             <div class="field"><label>Provider</label>
               <select id="sProvider"><option>openrouter</option><option>anthropic</option><option>openai</option><option>gemini</option><option value="claudecode">claude (Pro/Max)</option></select></div>
-            <div class="field"><label>Default model <a onclick="loadModels()" style="cursor:pointer;font-size:.75rem">↻ fetch my models</a></label>
-              <input id="sModel" list="modelList" placeholder="anthropic/claude-opus-4.6" autocomplete="off">
-              <datalist id="modelList"></datalist>
+            <div class="field"><label>Default model &nbsp;<a onclick="loadModels()" style="cursor:pointer;font-size:.75rem;color:var(--accent-strong)">↻ fetch my models</a></label>
+              <select id="sModelSel" onchange="pickModel(this.value)" style="width:100%;margin-bottom:8px"><option value="">↻ click "fetch my models" to load…</option></select>
+              <input id="sModel" placeholder="or type a model id" autocomplete="off">
               <div class="hint" id="modelListHint"></div></div>
           </div>
           <div class="field"><label>API key</label><input id="sKey" type="password" placeholder="paste your key"><div class="hint" id="keyHint"></div></div>
@@ -435,12 +435,14 @@
     await fetch('/api/env',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
     document.getElementById('modelMsg').textContent='saved — restart agents to apply';document.getElementById('sKey').value='';toast('Model settings saved');loadSettings();
   }
+  function pickModel(v){if(v&&v!=='__custom__')document.getElementById('sModel').value=v;}
   async function loadModels(){
-    const hint=document.getElementById('modelListHint');hint.innerHTML='<span class="spin"></span> fetching…';
-    try{const r=await(await fetch('/api/models')).json();const list=document.getElementById('modelList');
-      list.innerHTML=(r.models||[]).map(m=>`<option value="${m}">`).join('');
-      hint.textContent=(r.models&&r.models.length)?(r.models.length+' models — click the field to pick one'):'No models found — connect a provider / log in first.';
-    }catch(e){hint.textContent='could not fetch models';}
+    const sel=document.getElementById('sModelSel'),hint=document.getElementById('modelListHint');
+    hint.innerHTML='<span class="spin"></span> fetching…';
+    try{const r=await(await fetch('/api/models')).json();const models=r.models||[];const cur=document.getElementById('sModel').value;
+      sel.innerHTML='<option value="">— pick a model —</option>'+models.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('')+'<option value="__custom__">✎ custom (type below)</option>';
+      hint.textContent=models.length?(models.length+' models loaded from '+(r.base||'provider')):(r.error?('couldn\'t fetch: '+r.error):'No models — connect a provider or run aios claude-login first.');
+    }catch(e){sel.innerHTML='<option value="">fetch failed</option>';hint.textContent='could not reach the hub: '+e;}
   }
   async function connectClaude(){
     document.getElementById('claudeMsg').innerHTML='<span class="spin"></span> connecting…';

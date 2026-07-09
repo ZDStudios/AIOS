@@ -112,15 +112,33 @@ def _llm_key() -> str:
             or os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY") or "sk-aios")
 
 
-def fetch_provider_models() -> list:
-    """List the models the active provider serves (e.g. your Claude models via claude-code-api)."""
+def _models_from(url: str, key: str = "") -> list:
+    hdr = {"Authorization": f"Bearer {key}"} if key else {}
+    req = urllib.request.Request(url.rstrip("/") + "/models", headers=hdr)
+    data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+    # OpenAI shape {"data":[{"id":..}]} or a bare list
+    items = data.get("data", data) if isinstance(data, dict) else data
+    return [m.get("id") for m in items if isinstance(m, dict) and m.get("id")]
+
+
+def fetch_provider_models() -> dict:
+    """List models the active provider serves (your Claude models via claude-code-api, etc.).
+    Returns {models, base, error} so the UI can show what happened."""
+    base, key = llm_base(), _llm_key()
+    out = {"models": [], "base": base, "error": ""}
     try:
-        req = urllib.request.Request(llm_base() + "/models",
-                                     headers={"Authorization": f"Bearer {_llm_key()}"})
-        data = json.loads(urllib.request.urlopen(req, timeout=8).read())
-        return [m.get("id") for m in data.get("data", []) if m.get("id")]
-    except Exception:
-        return []
+        out["models"] = _models_from(base, key)
+    except Exception as e:
+        out["error"] = str(e)[:200]
+    # Fallback: if nothing came back, try claude-code-api directly (common case).
+    if not out["models"] and CLAUDECODE.rstrip("/") + "/v1" != base:
+        try:
+            m = _models_from(CLAUDECODE + "/v1")
+            if m:
+                out.update(models=m, base=CLAUDECODE + "/v1", error="")
+        except Exception:
+            pass
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -393,7 +411,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/system_prompt":
             self._send(200, {"prompt": read_system_prompt()})
         elif self.path == "/api/models":
-            self._send(200, {"models": fetch_provider_models()})
+            self._send(200, fetch_provider_models())
         elif self.path in ("/v1/models", "/api/v1/models"):
             # AIOS as an OpenAI-compatible API: its "models" are the chat targets.
             now = int(time.time())
