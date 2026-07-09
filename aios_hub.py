@@ -106,6 +106,33 @@ def read_system_prompt() -> str:
 # Chat "targets" the AIOS API exposes as OpenAI-style models.
 TARGETS = ["brain", "team", "opencode", "crewai", "claudecode", "all"]
 
+MEMORY_FILE = ROOT / ".aios" / "memory.json"
+USAGE_FILE = ROOT / ".aios" / "usage.json"
+PROMPTS_FILE = ROOT / ".aios" / "prompts.json"
+
+
+def _load_json(p, default):
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def _save_json(p, data):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def read_memory() -> list:
+    return _load_json(MEMORY_FILE, [])
+
+
+def bump_usage(target: str):
+    u = _load_json(USAGE_FILE, {})
+    u[target] = u.get(target, 0) + 1
+    # claude-code (subscription) and brain-on-subscription cost $0 in API terms.
+    _save_json(USAGE_FILE, u)
+
 
 def _llm_key() -> str:
     return (os.environ.get("AIOS_LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
@@ -230,6 +257,7 @@ def ask_claudecode(message: str, history: list | None = None) -> str:
 def route(target: str, message: str, history: list | None = None) -> str:
     history = history or []
     target = (target or "brain").lower()
+    bump_usage(target)
     if target in ("brain", "aios", "hub"):
         sys = read_system_prompt() or (
                "You are the AIOS Brain — the orchestrator of The AI OS, which unifies six agents: "
@@ -237,6 +265,10 @@ def route(target: str, message: str, history: list | None = None) -> str:
                "claude-code (Claude Code API), and LifeOS (shared skills). Be concise and helpful. Suggest "
                "which agent is best for a task. When a visual answer helps (charts, tables, forms, dashboards), "
                "you may emit OpenUI Lang (https://www.openui.com) which the openclaw-os dashboard renders live.")
+        mem = read_memory()
+        if mem:  # shared cross-agent memory — every brain reply knows these facts
+            sys += "\n\nKnown facts / preferences about the user (remember these):\n" + \
+                   "\n".join("- " + str(m) for m in mem[:40])
         return llm_chat(history + [{"role": "user", "content": message}], system=sys)
     if target == "crewai":
         return ask_crewai(message)
@@ -252,6 +284,45 @@ def route(target: str, message: str, history: list | None = None) -> str:
             parts.append(f"### {t}\n{route(t, message, history)}")
         return "\n\n".join(parts)
     return f"⚠️ Unknown target '{target}'. Use brain | team | crewai | opencode | claudecode | all."
+
+
+# --------------------------------------------------------------------------- #
+# Unique features: auto-router, arena (A/B), council (consensus), pipeline     #
+# --------------------------------------------------------------------------- #
+def auto_route(message: str, history: list | None = None) -> dict:
+    """Pick the best agent for the message automatically, then answer with it."""
+    sysp = ("Classify which AI OS agent should handle the user's request. Reply with ONLY one word: "
+            "opencode (writing/running code), crewai (multi-step research/workflows), "
+            "claudecode (coding via Claude Code), or brain (general/orchestration). Request:")
+    pick = (llm_chat([{"role": "user", "content": message}], system=sysp) or "brain").strip().lower()
+    pick = next((t for t in ("opencode", "crewai", "claudecode", "brain") if t in pick), "brain")
+    return {"chosen": pick, "reply": route(pick, message, history)}
+
+
+def run_arena(message: str, targets: list, history: list | None = None) -> dict:
+    """Same prompt to 2+ agents/models, side by side, to compare."""
+    return {"results": [{"target": t, "reply": route(t, message, history)} for t in targets[:4]]}
+
+
+def run_council(message: str, targets: list, history: list | None = None) -> dict:
+    """Ask several agents, then synthesize a consensus noting agreement/disagreement."""
+    results = [{"target": t, "reply": route(t, message, history)} for t in targets[:4]]
+    joined = "\n\n".join(f"[{r['target']}]\n{r['reply']}" for r in results)
+    consensus = llm_chat([{"role": "user", "content":
+                           f"Question: {message}\n\nAnswers from the council:\n{joined}\n\n"
+                           "Give one best answer. Note where they agree and flag any disagreement."}],
+                         system="You are the council chair for The AI OS. Be decisive and concise.")
+    return {"results": results, "consensus": consensus}
+
+
+def run_pipeline(message: str, steps: list, history: list | None = None) -> dict:
+    """Chain agents: each step's output feeds the next (research → code → summarize)."""
+    out, cur = [], message
+    for t in steps[:6]:
+        r = route(t, cur, [])
+        out.append({"target": t, "output": r})
+        cur = r
+    return {"steps": out, "final": cur}
 
 
 # --------------------------------------------------------------------------- #
@@ -412,6 +483,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"prompt": read_system_prompt()})
         elif self.path == "/api/models":
             self._send(200, fetch_provider_models())
+        elif self.path == "/api/memory":
+            self._send(200, {"memory": read_memory()})
+        elif self.path == "/api/prompts":
+            self._send(200, {"prompts": _load_json(PROMPTS_FILE, [])})
+        elif self.path == "/api/usage":
+            u = _load_json(USAGE_FILE, {})
+            free = u.get("claudecode", 0)
+            self._send(200, {"usage": u, "total": sum(u.values()), "free_requests": free})
         elif self.path in ("/v1/models", "/api/v1/models"):
             # AIOS as an OpenAI-compatible API: its "models" are the chat targets.
             now = int(time.time())
@@ -501,6 +580,40 @@ class Handler(BaseHTTPRequestHandler):
                          "Pointed at claude-code, but the Claude CLI isn't logged in yet. Run "
                          "`aios claude-login` (or `claude setup-token`) in a terminal to authorize your "
                          "Pro/Max account, then chat.")})
+        elif self.path == "/api/route_auto":
+            self._send(200, auto_route(payload.get("message", ""), payload.get("history", [])))
+        elif self.path == "/api/arena":
+            self._send(200, run_arena(payload.get("message", ""),
+                                      payload.get("targets", ["brain", "claudecode"]),
+                                      payload.get("history", [])))
+        elif self.path == "/api/council":
+            self._send(200, run_council(payload.get("message", ""),
+                                        payload.get("targets", ["brain", "crewai", "claudecode"]),
+                                        payload.get("history", [])))
+        elif self.path == "/api/pipeline":
+            self._send(200, run_pipeline(payload.get("message", ""),
+                                         payload.get("steps", ["crewai", "opencode", "brain"]),
+                                         payload.get("history", [])))
+        elif self.path == "/api/memory":
+            mem = read_memory()
+            op = payload.get("op", "add")
+            if op == "add" and payload.get("text"):
+                mem.append(payload["text"])
+            elif op == "delete":
+                mem = [m for i, m in enumerate(mem) if i != payload.get("index")]
+            elif op == "clear":
+                mem = []
+            _save_json(MEMORY_FILE, mem)
+            self._send(200, {"ok": True, "memory": mem})
+        elif self.path == "/api/prompts":
+            items = _load_json(PROMPTS_FILE, [])
+            op = payload.get("op", "add")
+            if op == "add":
+                items.append({"name": payload.get("name", "prompt"), "text": payload.get("text", "")})
+            elif op == "delete":
+                items = [p for p in items if p.get("name") != payload.get("name")]
+            _save_json(PROMPTS_FILE, items)
+            self._send(200, {"ok": True, "prompts": items})
         elif self.path == "/api/schedules":
             items = load_schedules()
             op = payload.get("op", "add")

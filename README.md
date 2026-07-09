@@ -172,6 +172,21 @@ Plus two integrations that glue it together:
 
 **Auto-updates:** `aios start` now auto-runs `git pull` + reinstalls changed deps when the repo has updates (`updates.auto_update: true`). Turn it off in `aios.config.yaml`.
 
+## ✨ 10 things no single-agent tool can do
+
+Because The AI OS runs **six agents wired through one hub**, it can do multi-agent things nothing else can:
+
+1. **🎯 Auto-router** — the hub reads your message and *automatically picks the best agent* (code → opencode, research → CrewAI…), and tells you which it chose.
+2. **⚖️ Agent Arena** — send one prompt to **two agents side-by-side** and compare their answers.
+3. **🏛️ Council** — ask several agents, then a chair agent **synthesizes a consensus** and flags where they disagree.
+4. **⛓ Pipelines** — **chain agents**: research (CrewAI) → build (opencode) → summarize (Brain), each step feeding the next.
+5. **🧠 Shared memory** — facts you save are injected into **every** agent's context, so they all know you.
+6. **📚 Prompt library + slash commands** — save prompts, type `/name` in chat to expand them.
+7. **🎙️ Voice in/out** — talk to the hub and have replies read aloud (browser-native, no cloud).
+8. **⌘K command palette** — jump anywhere or ask any agent instantly.
+9. **📊 Usage + subscription-savings meter** — counts requests per agent and shows how many ran **free on your Claude subscription**.
+10. **⬇️ Export & saved conversations** — full conversation history (pinned/today/earlier), export any chat to Markdown.
+
 **AIOS API (OpenAI-compatible):** the hub is itself an API you can POST to. Point any OpenAI client/SDK at `http://<host>:8787/v1`. The "models" are the agents/targets: `brain`, `team`, `opencode`, `crewai`, `claudecode`, `all`.
 
 ```bash
