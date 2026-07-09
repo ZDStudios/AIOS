@@ -117,8 +117,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"AIOS embed proxy: http://127.0.0.1:{PORT}/  →  {TARGET}  (frame headers stripped)")
+    host = os.environ.get("AIOS_PROXY_HOST", "0.0.0.0")  # reachable from the Windows browser over WSL
+    srv = ThreadingHTTPServer((host, PORT), Handler)
+    print(f"AIOS embed proxy: http://{host}:{PORT}/  →  {TARGET}  (frame headers stripped)")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

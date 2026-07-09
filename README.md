@@ -152,6 +152,7 @@ Plus two integrations that glue it together:
 | `aios setup --skip-keys` | Skip the API-key wizard entirely — the stack still runs; add keys later in the hub **Settings** panel. |
 | `aios start [svc…\|all]` | Start service(s) (`opencode hermes openclaw crewai hub`), wait on health checks. Accepts multiple names. |
 | `aios stop [svc…\|all]` | Stop service(s); kills the whole process tree — no orphans. |
+| `aios restart [svc…\|all]` | Force a clean respawn (picks up new code after an update). `aios update` does this automatically. |
 | `aios status` | Table of each service: state, port, PID, health. |
 | `aios doctor` | Diagnose tools, config, deps and ports — with the exact fix for each. |
 | `aios update [--check]` | `git pull` + reinstall changed deps + re-render. `--check` just reports if updates exist (also auto-checked on start). |

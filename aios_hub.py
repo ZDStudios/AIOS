@@ -457,8 +457,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     threading.Thread(target=_scheduler_loop, daemon=True).start()
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"AIOS Hub listening on http://127.0.0.1:{PORT}/  (dashboard + interconnect + scheduler)")
+    # Bind all interfaces by default so the Windows browser can reach it over WSL.
+    host = os.environ.get("AIOS_HUB_HOST", "0.0.0.0")
+    srv = ThreadingHTTPServer((host, PORT), Handler)
+    print(f"AIOS Hub listening on http://{host}:{PORT}/  (dashboard + interconnect + scheduler)")
     print(f"peers: {json.dumps(PEERS)}")
     try:
         srv.serve_forever()

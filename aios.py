@@ -1197,10 +1197,24 @@ def cmd_start(args):
             warn(f"{svc}: disabled in aios.config.yaml — skipping")
             continue
         rec = read_pid(svc)
-        if rec and pid_alive(rec["pid"]):
-            ok(f"{svc}: already running (pid {rec['pid']})")
-            continue
-        if spec.get("port") and port_in_use(spec["port"]):
+        alive = rec and pid_alive(rec["pid"])
+        force = getattr(args, "restart", False)
+        # A tracked-but-alive process might be stale (old code) or hung — verify it
+        # actually answers, and restart it if not (or if --restart was requested).
+        if alive and not force:
+            healthy = (not spec.get("health")) or wait_health(spec["health"], spec.get("port"), timeout=3)
+            if healthy:
+                ok(f"{svc}: already running (pid {rec['pid']})")
+                continue
+            warn(f"{svc}: process alive but not responding — restarting")
+        if alive:  # reached only when forced or unhealthy → replace it
+            kill_pid(rec["pid"])
+            pidfile(svc).unlink(missing_ok=True)
+            for _ in range(12):  # wait for the port to free
+                if not (spec.get("port") and port_in_use(spec["port"])):
+                    break
+                time.sleep(0.5)
+        elif spec.get("port") and port_in_use(spec["port"]):
             warn(f"{svc}: port {spec['port']} already in use (foreign process) — skipping")
             continue
         extra = {}
@@ -1218,6 +1232,12 @@ def cmd_start(args):
             ok(f"{svc}: launched (no health endpoint)")
     say()
     _print_urls(cfg)
+
+
+def cmd_restart(args):
+    """Restart (or start) services — forces a clean respawn to pick up new code."""
+    cmd_start(argparse.Namespace(service=getattr(args, "service", ["all"]),
+                                 timeout=getattr(args, "timeout", 90), restart=True))
 
 
 def cmd_stop(args):
@@ -1379,6 +1399,12 @@ def cmd_update(args):
         mount_lifeos(cfg)
     if cfg_get(cfg, "openui.mount_context", True):
         mount_openui(cfg)
+    # Restart any services that are currently running so the new code takes effect.
+    specs = service_specs(cfg)
+    running = [s for s in specs if (read_pid(s) and pid_alive(read_pid(s)["pid"]))]
+    if running:
+        head(f"Restarting running services to apply the update: {', '.join(running)}")
+        cmd_start(argparse.Namespace(service=running, timeout=90, restart=True))
     ok("update complete.")
 
 
@@ -1674,6 +1700,11 @@ def build_parser():
     s = sub.add_parser("stop", help="stop service(s)")
     s.add_argument("service", nargs="*", default=["all"])
     s.set_defaults(func=cmd_stop)
+
+    s = sub.add_parser("restart", help="restart service(s) — forces a clean respawn (new code)")
+    s.add_argument("service", nargs="*", default=["all"])
+    s.add_argument("--timeout", type=int, default=90)
+    s.set_defaults(func=cmd_restart)
 
     sub.add_parser("status", help="show service status").set_defaults(func=cmd_status)
     sub.add_parser("doctor", help="diagnose environment").set_defaults(func=cmd_doctor)
