@@ -107,6 +107,7 @@ def llm_base() -> str:
         "openrouter": "https://openrouter.ai/api/v1",
         "openai": "https://api.openai.com/v1",
         "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "claudecode": CLAUDECODE + "/v1",  # Claude Pro/Max via claude-code-api
     }.get(prov, "https://openrouter.ai/api/v1")
 
 
@@ -392,6 +393,27 @@ class Handler(BaseHTTPRequestHandler):
             res = run_aios("setup", "--non-interactive", "--skip-tools",
                            "--skip-install", "--skip-wire")  # re-render into agents
             self._send(200, {"ok": res["ok"], "saved": True})
+        elif self.path == "/api/claude_connect":
+            # Point the brain/team/crews at claude-code-api → uses the user's Claude
+            # Pro/Max subscription (auth = the local `claude` CLI login, no API key).
+            model = "claude-sonnet-4-5"
+            authed = True
+            try:
+                m = json.loads(urllib.request.urlopen(CLAUDECODE + "/v1/models", timeout=6).read())
+                ids = [x.get("id") for x in m.get("data", []) if x.get("id")]
+                if ids:
+                    model = next((i for i in ids if "sonnet" in i.lower()), ids[0])
+            except Exception:
+                authed = False
+            write_env_updates({
+                "AIOS_LLM_PROVIDER": "claudecode",
+                "AIOS_LLM_BASE_URL": CLAUDECODE + "/v1",
+                "AIOS_LLM_API_KEY": "sk-aios-claudecode",
+                "AIOS_DEFAULT_MODEL": model,
+            })
+            run_aios("setup", "--non-interactive", "--skip-tools", "--skip-install", "--skip-wire")
+            self._send(200, {"ok": True, "model": model, "reachable": authed,
+                             "note": "" if authed else "claude-code-api didn't answer — start it (`aios start claudecode`) and run `claude` once to log into your Pro/Max account."})
         elif self.path == "/api/schedules":
             items = load_schedules()
             op = payload.get("op", "add")

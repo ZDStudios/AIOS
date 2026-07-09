@@ -59,8 +59,8 @@
   .icon-btn:hover{border-color:var(--border-strong);color:var(--text)}
   .btn{border:1px solid var(--border);background:var(--elevated);color:var(--text);border-radius:8px;padding:8px 13px;font-weight:600;font-size:.85rem;display:inline-flex;align-items:center;gap:6px}
   .btn:hover{border-color:var(--border-strong)}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-  .btn.primary:hover{background:var(--accent-strong)}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-strong));border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
   .btn.danger{color:var(--danger);border-color:var(--border)}
   .btn.sm{padding:5px 10px;font-size:.8rem}
 
@@ -97,6 +97,12 @@
   .msg .bubble{padding:10px 14px;border-radius:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word;background:var(--surface);border:1px solid var(--border)}
   .msg.user .bubble{background:var(--accent-soft);border-color:var(--accent-soft2)}
   .msg .bubble code{font-family:var(--mono);background:var(--sunk2);padding:1px 5px;border-radius:4px;font-size:.86em}
+  .msg .bubble h4{font-size:.92rem;font-weight:700;margin:10px 0 4px;letter-spacing:-.01em}
+  .msg .bubble h4:first-child{margin-top:0}
+  .msg .bubble ul{margin:6px 0 6px 4px;padding-left:16px}
+  .msg .bubble li{margin:2px 0}
+  .msg .bubble pre{background:var(--sunk);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:.82rem;overflow-x:auto;margin:8px 0;white-space:pre-wrap;line-height:1.5}
+  .msg .bubble b{color:var(--text)}
   .composer{border-top:1px solid var(--border);padding:12px 16px;background:var(--surface);flex-shrink:0}
   .targets{display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap}
   .chip{font-size:.8rem;font-weight:600;color:var(--text2);background:var(--elevated);border:1px solid var(--border);padding:5px 11px;border-radius:7px;display:flex;align-items:center;gap:5px}
@@ -228,12 +234,19 @@
     <div id="settings" class="view">
       <div class="vhead"><h2>⚙️ Settings</h2><span class="sub">edit once — applies to every agent</span></div>
       <div class="vbody pad" style="max-width:760px">
+        <div class="card" style="border-color:var(--accent-soft2)">
+          <h3>🔗 Connect your Claude account (Pro / Max)</h3>
+          <p>Use your Claude subscription for the Brain, Team and crews — routed through <b>claude-code</b>,
+             no API key or per-token cost. One click points everything at it and re-renders.</p>
+          <div class="row"><button class="btn primary" onclick="connectClaude()">Use my Claude subscription</button><span id="claudeMsg" class="kv"></span></div>
+          <p class="mono" style="font-size:.76rem;color:var(--text3);margin-top:12px">First time? run <b>claude</b> once in a terminal to log in to your Pro/Max account, then click above.</p>
+        </div>
         <div class="card">
           <h3>🔑 Model provider</h3>
           <p>One key powers all five agents. Saving re-renders it into each project's config.</p>
           <div class="grid2" style="margin-top:16px">
             <div class="field"><label>Provider</label>
-              <select id="sProvider"><option>openrouter</option><option>anthropic</option><option>openai</option><option>gemini</option></select></div>
+              <select id="sProvider"><option>openrouter</option><option>anthropic</option><option>openai</option><option>gemini</option><option value="claudecode">claude (Pro/Max)</option></select></div>
             <div class="field"><label>Default model</label><input id="sModel" placeholder="anthropic/claude-opus-4.6"></div>
           </div>
           <div class="field"><label>API key</label><input id="sKey" type="password" placeholder="paste your key"><div class="hint" id="keyHint"></div></div>
@@ -313,14 +326,25 @@
   const input=document.getElementById('input');
   input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
   input.addEventListener('input',()=>{input.style.height='44px';input.style.height=Math.min(input.scrollHeight,150)+'px';});
-  function addMsg(who,text,user,icon){const m=document.createElement('div');m.className='msg'+(user?' user':'');m.innerHTML=`<div class="av">${icon}</div><div><div class="who">${who}</div><div class="bubble"></div></div>`;m.querySelector('.bubble').textContent=text;const b=document.getElementById('msgs');b.appendChild(m);b.scrollTop=b.scrollHeight;return m;}
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function mdRender(t){
+    t=esc(t);
+    t=t.replace(/```([\s\S]*?)```/g,(m,c)=>'<pre>'+c.replace(/^\n/,'')+'</pre>');
+    t=t.replace(/`([^`]+)`/g,'<code>$1</code>');
+    t=t.replace(/^#{1,6}\s*(.+)$/gm,'<h4>$1</h4>');
+    t=t.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+    t=t.replace(/(?:^[-*]\s+.+(?:\n|$))+/gm,b=>'<ul>'+b.trim().split(/\n/).map(l=>'<li>'+l.replace(/^[-*]\s+/,'')+'</li>').join('')+'</ul>');
+    t=t.replace(/\n/g,'<br>');
+    return t.replace(/<br>(<\/?(?:pre|ul|li|h4)>)/g,'$1').replace(/(<\/(?:pre|ul|h4)>)<br>/g,'$1');
+  }
+  function addMsg(who,text,user,icon){const m=document.createElement('div');m.className='msg'+(user?' user':'');m.innerHTML=`<div class="av">${icon}</div><div><div class="who">${who}</div><div class="bubble"></div></div>`;const bub=m.querySelector('.bubble');if(user)bub.textContent=text;else bub.innerHTML=mdRender(text);const b=document.getElementById('msgs');b.appendChild(m);b.scrollTop=b.scrollHeight;return m;}
   async function send(){
     const text=input.value.trim();if(!text)return;input.value='';input.style.height='44px';
     addMsg('you',text,true,'🧑');
     const h=addMsg(target,'',false,'<span class="spin"></span>');
     document.getElementById('send').disabled=true;
     try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,message:text,history})});
-      const d=await r.json();h.querySelector('.av').textContent=ICON[target]||'◆';h.querySelector('.bubble').textContent=d.reply||'(no reply)';
+      const d=await r.json();h.querySelector('.av').textContent=ICON[target]||'◆';h.querySelector('.bubble').innerHTML=mdRender(d.reply||'(no reply)');
       history.push({role:'user',content:text});history.push({role:'assistant',content:(d.reply||'').slice(0,4000)});if(history.length>12)history=history.slice(-12);
     }catch(e){h.querySelector('.av').textContent='⚠️';h.querySelector('.bubble').textContent='Hub unreachable: '+e;}
     document.getElementById('send').disabled=false;
@@ -343,6 +367,13 @@
     document.getElementById('modelMsg').innerHTML='<span class="spin"></span> saving…';
     await fetch('/api/env',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
     document.getElementById('modelMsg').textContent='saved — restart agents to apply';document.getElementById('sKey').value='';toast('Model settings saved');loadSettings();
+  }
+  async function connectClaude(){
+    document.getElementById('claudeMsg').innerHTML='<span class="spin"></span> connecting…';
+    try{const r=await(await fetch('/api/claude_connect',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
+      document.getElementById('claudeMsg').textContent=r.reachable?('connected — model '+r.model+'. Restart agents to apply.'):(r.note||'set, but claude-code-api not reachable');
+      toast(r.reachable?'Connected to your Claude account':'Saved — start claude-code + run `claude` to log in');loadSettings();
+    }catch(e){document.getElementById('claudeMsg').textContent='failed: '+e;}
   }
   async function saveChannels(){
     const updates={};document.querySelectorAll('#channelFields input').forEach(i=>{if(i.value.trim())updates[i.dataset.ck]=i.value.trim();});

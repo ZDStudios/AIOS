@@ -331,6 +331,8 @@ PROVIDER_VAR = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
     "gemini": "GEMINI_API_KEY",
+    # Claude Pro/Max via claude-code-api (OpenAI-compatible; auth is the Claude CLI login).
+    "claudecode": "OPENAI_API_KEY",
 }
 PASSTHROUGH_KEYS = [
     "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
@@ -755,10 +757,14 @@ def cmd_setup(args):
     if cfg_get(cfg, "services.openclaw_os.enabled", True) and not args.skip_wire:
         wire_openclaw_os(quiet=True)
 
-    # 8) offer to run on login/boot
+    # 8) offer to install the global `aios` command + autostart
     interactive = sys.stdin.isatty() and not args.non_interactive
+    if interactive and not cli_installed():
+        ans = input(f"\n  Make `aios` runnable from anywhere (add it to your PATH)? {C.GRY}[Y/n]{C.R}: ").strip().lower()
+        if ans in ("", "y", "yes"):
+            install_cli()
     if interactive and not autostart_status():
-        ans = input(f"\n  Start The AI OS automatically on login/boot? {C.GRY}[y/N]{C.R}: ").strip().lower()
+        ans = input(f"  Start The AI OS automatically on login/boot? {C.GRY}[y/N]{C.R}: ").strip().lower()
         if ans in ("y", "yes"):
             autostart_enable()
 
@@ -1515,6 +1521,80 @@ def cmd_autostart(args):
         say("autostart: " + (f"{C.GRN}enabled{C.R}" if autostart_status() else f"{C.GRY}disabled{C.R}"))
 
 
+# --------------------------------------------------------------------------- #
+# Global `aios` command (run from anywhere, no ./)                             #
+# --------------------------------------------------------------------------- #
+def _cli_bin_dir() -> Path:
+    return Path.home() / ".local" / "bin"
+
+
+def install_cli():
+    """Put an `aios` shim on PATH so it runs from any directory without ./."""
+    d = _cli_bin_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    if IS_WIN:
+        shim = d / "aios.cmd"
+        shim.write_text(f'@echo off\r\ncall "{ROOT / "aios.cmd"}" %*\r\n', encoding="utf-8")
+        ps = d / "aios.ps1"
+        ps.write_text(f'& "{ROOT / "aios.ps1"}" @args\r\n', encoding="utf-8")
+        _win_add_path(str(d))
+        ok(f"installed `aios` → {shim}")
+        say(f"  {C.GRY}Open a NEW terminal, then run `aios` from anywhere.{C.R}")
+    else:
+        shim = d / "aios"
+        shim.write_text(f'#!/usr/bin/env bash\nexec "{ROOT / "aios"}" "$@"\n', encoding="utf-8")
+        os.chmod(shim, 0o755)
+        ok(f"installed `aios` → {shim}")
+        if str(d) not in os.environ.get("PATH", "").split(":"):
+            _ensure_bashrc_path(d)
+            say(f"  {C.GRY}Added {d} to PATH — run `source ~/.bashrc` or open a new shell, then `aios` works anywhere.{C.R}")
+        else:
+            say(f"  {C.GRY}`aios` now runs from any directory.{C.R}")
+
+
+def uninstall_cli():
+    for name in ("aios", "aios.cmd", "aios.ps1"):
+        p = _cli_bin_dir() / name
+        if p.exists():
+            p.unlink()
+    ok("removed the global `aios` shim.")
+
+
+def _ensure_bashrc_path(d: Path):
+    line = f'export PATH="{d}:$PATH"'
+    marker = "# >>> The AI OS PATH >>>"
+    for rc in (Path.home() / ".bashrc", Path.home() / ".profile"):
+        try:
+            txt = rc.read_text(encoding="utf-8") if rc.exists() else ""
+            if marker in txt:
+                continue
+            with open(rc, "a", encoding="utf-8") as f:
+                f.write(f"\n{marker}\n{line}\n# <<< The AI OS PATH <<<\n")
+        except Exception:
+            pass
+
+
+def _win_add_path(d: str):
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-Command",
+                        "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+                        f"if($p -notlike '*{d}*'){{[Environment]::SetEnvironmentVariable('Path',($p.TrimEnd(';')+';{d}'),'User')}}"],
+                       capture_output=True)
+    except Exception:
+        say(f"  {C.YEL}Add this folder to your PATH manually: {d}{C.R}")
+
+
+def cli_installed() -> bool:
+    return (_cli_bin_dir() / ("aios.cmd" if IS_WIN else "aios")).exists()
+
+
+def cmd_install_cli(args):
+    if getattr(args, "action", "install") == "uninstall":
+        uninstall_cli()
+    else:
+        install_cli()
+
+
 def cmd_url(args):
     _print_urls(load_config())
 
@@ -1620,6 +1700,10 @@ def build_parser():
     s = sub.add_parser("autostart", help="run The AI OS on login/boot")
     s.add_argument("action", nargs="?", choices=["enable", "disable", "status"], default="status")
     s.set_defaults(func=cmd_autostart)
+
+    s = sub.add_parser("install-cli", help="put `aios` on your PATH so it runs from anywhere")
+    s.add_argument("action", nargs="?", choices=["install", "uninstall"], default="install")
+    s.set_defaults(func=cmd_install_cli)
 
     sub.add_parser("url", help="print dashboard URLs").set_defaults(func=cmd_url)
     sub.add_parser("wire", help="(re)install the openclaw-os plugin into openclaw").set_defaults(func=cmd_wire)

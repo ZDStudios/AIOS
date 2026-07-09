@@ -67,10 +67,14 @@ The installer clones the repo to `~/AIOS`, installs the toolchains (**uv, bun, p
 
 ```bash
 cd ~/AIOS
-./aios setup --force     # enter your model provider + API key
-./aios start             # bring the whole stack up
-./aios url               # open the Control Room
+./aios install-cli       # so `aios` runs from anywhere (no ./)
+aios setup --force       # enter your model provider + API key (or skip)
+aios start               # bring the whole stack up
+aios url                 # open the Control Room
 ```
+
+> `aios install-cli` adds `aios` to your PATH (`~/.local/bin`), so after that you can run
+> `aios update`, `aios start`, etc. from any directory. `aios setup` also offers to do this.
 
 ## 💬 The Control Room
 
@@ -161,8 +165,9 @@ Plus two integrations that glue it together:
 - **✦ Team** — one assistant that orchestrates the whole team: the Brain plans, delegates subtasks to the specialist agents, and synthesizes one answer (the practical "merge").
 - **Configure openclaw AND hermes fully inside the hub** — both control-UIs are embedded via frame-stripping proxies, so you get channels, **connectors**, model providers, **MCP servers**, skills, plugins, **automations/cron**, and sessions right in the hub (they normally block embedding).
 - **Automations** — schedule prompts to run against any agent every N minutes (daily digests, checks).
+- **Connect your Claude account (Pro/Max)** — one click in **Settings** points the Brain/Team/crews at **claude-code** (your Claude subscription, no API key or per-token cost) and auto-configures everything.
 - **Settings** — edit provider/key/model, channel tokens, and `aios.config.yaml`; it re-renders into every agent, no terminal needed.
-- **Themes** — Light, Dark, Midnight, Slate, Rose.
+- **Themes** — Light, Dark, Midnight, Slate, Rose. Chat renders markdown (headers, bullets, code blocks).
 
 **Auto-updates:** `aios start` now auto-runs `git pull` + reinstalls changed deps when the repo has updates (`updates.auto_update: true`). Turn it off in `aios.config.yaml`.
 
