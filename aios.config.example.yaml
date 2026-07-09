@@ -47,6 +47,9 @@ lifeos:
 openui:
   mount_context: true      # mount OpenUI (generative UI) context into the agents
 
+skills:
+  mount: true              # mount the bundled skills/ (skill-maker, mcp-maker, …) into agents
+
 updates:
   check_on_start: true     # on `aios start`, check the repo for updates and notify
   auto_update: true        # on `aios start`, auto git-pull + reinstall if the repo changed

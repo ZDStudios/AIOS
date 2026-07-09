@@ -172,6 +172,10 @@ Plus two integrations that glue it together:
 
 **Auto-updates:** `aios start` now auto-runs `git pull` + reinstalls changed deps when the repo has updates (`updates.auto_update: true`). Turn it off in `aios.config.yaml`.
 
+**Skills & system prompt:** 10 skills ship built-in (skill-maker, mcp-maker, web-search, web-browse, image-gen, code-review, summarize, research, data-analyst, task-scheduler) and mount into every agent. Edit the Brain/Team **system prompt** live in the hub → **Settings**.
+
+**On WSL?** `127.0.0.1:8787` often won't reach WSL from your Windows browser (localhost-forwarding is flaky). `aios start`/`aios url` now print your **WSL IP** URL — use that (e.g. `http://172.31.x.x:8787/`). The hub binds `0.0.0.0` so the WSL IP always works.
+
 ## ⚙️ Configuration
 
 - **`.env`** — secrets only (`AIOS_LLM_PROVIDER`, `AIOS_LLM_API_KEY`, `AIOS_DEFAULT_MODEL`, optional channel tokens). Git-ignored.

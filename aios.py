@@ -753,6 +753,10 @@ def cmd_setup(args):
     if cfg_get(cfg, "openui.mount_context", True):
         mount_openui(cfg)
 
+    # 6c) mount the bundled AI OS skills (skill-maker, mcp-maker, …) into the agents
+    if cfg_get(cfg, "skills.mount", True):
+        mount_aios_skills(cfg)
+
     # 7) wire openclaw-os plugin (best-effort; needs openclaw runnable)
     if cfg_get(cfg, "services.openclaw_os.enabled", True) and not args.skip_wire:
         wire_openclaw_os(quiet=True)
@@ -1088,6 +1092,29 @@ def mount_lifeos(cfg: dict):
     say(f"{C.GRY}Source: {src}{C.R}")
 
 
+def mount_aios_skills(cfg: dict):
+    """Copy the bundled AI OS skills (skills/) into each agent's skill directory."""
+    head("Mounting AI OS skills")
+    src = ROOT / "skills"
+    if not src.exists():
+        warn("skills/ not found; skipping")
+        return
+    names = [p.name for p in src.iterdir() if p.is_dir()]
+    targets = [Path.home() / ".openclaw" / "skills", Path.home() / ".hermes" / "skills",
+               STATE / "skills"]
+    for t in targets:
+        for name in names:
+            try:
+                dst = t / name
+                if dst.exists():
+                    shutil.rmtree(dst)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(src / name, dst)
+            except Exception as e:
+                warn(f"could not mount {name} → {t}: {e}")
+    ok(f"mounted {len(names)} skills: {', '.join(names)}")
+
+
 def mount_openui(cfg: dict):
     """Mount OpenUI (generative-UI) context into every agent's skill dir so any
     agent can respond with OpenUI Lang that the openclaw-os dashboard renders."""
@@ -1399,6 +1426,8 @@ def cmd_update(args):
         mount_lifeos(cfg)
     if cfg_get(cfg, "openui.mount_context", True):
         mount_openui(cfg)
+    if cfg_get(cfg, "skills.mount", True):
+        mount_aios_skills(cfg)
     # Restart any services that are currently running so the new code takes effect.
     specs = service_specs(cfg)
     running = [s for s in specs if (read_pid(s) and pid_alive(read_pid(s)["pid"]))]
@@ -1656,10 +1685,30 @@ def _openclaw_os_url(cfg) -> str | None:
     return cfg_get(cfg, "health.openclaw_os", f"http://127.0.0.1:{port}/plugins/openclawos/")
 
 
+def _is_wsl() -> bool:
+    try:
+        return "microsoft" in Path("/proc/version").read_text(errors="ignore").lower()
+    except Exception:
+        return bool(os.environ.get("WSL_DISTRO_NAME"))
+
+
+def _wsl_ip() -> str | None:
+    try:
+        out = subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=5).stdout.split()
+        return out[0] if out else None
+    except Exception:
+        return None
+
+
 def _print_urls(cfg):
     hbp = int(cfg_get(cfg, "services.hub.port", 8787))
     say(f"{C.B}★ Control Room — talk to everything{C.R}")
     say(f"  {C.CYN}http://127.0.0.1:{hbp}/{C.R}   (the AIOS Hub dashboard)")
+    if _is_wsl():
+        ip = _wsl_ip()
+        if ip:
+            say(f"  {C.B}{C.YEL}WSL → open THIS in your Windows browser: http://{ip}:{hbp}/{C.R}")
+            say(f"  {C.GRY}(127.0.0.1 may not forward from Windows to WSL — the IP above always works){C.R}")
     say(f"\n{C.B}Individual surfaces{C.R}")
     osurl = _openclaw_os_url(cfg)
     if osurl:

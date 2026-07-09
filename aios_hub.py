@@ -93,6 +93,14 @@ CLAUDECODE = os.environ.get("AIOS_CLAUDECODE_URL", "http://127.0.0.1:8000").rstr
 OPENCLAW_EMBED = os.environ.get("AIOS_OPENCLAWPROXY_URL", "http://127.0.0.1:8791/")
 HERMES_EMBED = os.environ.get("AIOS_HERMESPROXY_URL", "http://127.0.0.1:8792/")
 SCHEDULES_FILE = ROOT / ".aios" / "schedules.json"
+SYSTEM_PROMPT_FILE = ROOT / ".aios" / "system_prompt.txt"
+
+
+def read_system_prompt() -> str:
+    try:
+        return SYSTEM_PROMPT_FILE.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
 
 
 # --------------------------------------------------------------------------- #
@@ -185,7 +193,8 @@ def route(target: str, message: str, history: list | None = None) -> str:
     history = history or []
     target = (target or "brain").lower()
     if target in ("brain", "aios", "hub"):
-        sys = ("You are the AIOS Brain — the orchestrator of The AI OS, which unifies six agents: "
+        sys = read_system_prompt() or (
+               "You are the AIOS Brain — the orchestrator of The AI OS, which unifies six agents: "
                "opencode (coding), hermes (autonomous), openclaw (channels), CrewAI (multi-agent crews), "
                "claude-code (Claude Code API), and LifeOS (shared skills). Be concise and helpful. Suggest "
                "which agent is best for a task. When a visual answer helps (charts, tables, forms, dashboards), "
@@ -361,6 +370,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {**PEERS, "openclaw-embed": OPENCLAW_EMBED, "hermes-embed": HERMES_EMBED})
         elif self.path == "/api/schedules":
             self._send(200, load_schedules())
+        elif self.path == "/api/system_prompt":
+            self._send(200, {"prompt": read_system_prompt()})
         elif self.path == "/api/config":
             env = read_env_file()
             self._send(200, {
@@ -433,6 +444,13 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/config_text":
             try:
                 CONFIG_FILE.write_text(payload.get("text", ""), encoding="utf-8")
+                self._send(200, {"ok": True})
+            except Exception as e:
+                self._send(200, {"ok": False, "error": str(e)})
+        elif self.path == "/api/system_prompt":
+            try:
+                SYSTEM_PROMPT_FILE.parent.mkdir(parents=True, exist_ok=True)
+                SYSTEM_PROMPT_FILE.write_text(payload.get("prompt", ""), encoding="utf-8")
                 self._send(200, {"ok": True})
             except Exception as e:
                 self._send(200, {"ok": False, "error": str(e)})

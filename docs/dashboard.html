@@ -254,6 +254,13 @@
         </div>
 
         <div class="card">
+          <h3>🧠 System prompt (Brain &amp; Team)</h3>
+          <p>Set the personality/instructions for the Brain and Team. Leave blank to use the default.</p>
+          <div class="field" style="margin-top:12px"><textarea id="sSysPrompt" rows="6" placeholder="You are my personal AI OS assistant. Be concise, proactive, and…"></textarea></div>
+          <div class="row"><button class="btn primary" onclick="saveSysPrompt()">Save system prompt</button><span id="sysMsg" class="kv"></span></div>
+        </div>
+
+        <div class="card">
           <h3>📣 Channels <span class="badge down" style="font-weight:600">optional</span></h3>
           <p>Tokens for openclaw messaging channels. Leave blank to skip.</p>
           <div id="channelFields" style="margin-top:14px"></div>
@@ -301,7 +308,7 @@
     if(v==='crewai')agentPanel('crewai','crewaiBody','Role-based multi-agent crews. Chat with it from the Chat tab (target “CrewAI”). It can call the other agents via the hub.',peers.crewai);
     if(v==='claudecode')agentPanel('claudecode','claudecodeBody','Claude Code exposed as an OpenAI-compatible API. Chat with it (target “claude-code”), or point any tool at <span class="mono">'+(peers.claudecode||'http://127.0.0.1:8000')+'/v1</span>. Needs the <span class="mono">claude</span> CLI installed + authenticated.',peers.claudecode);
     if(v==='automations')loadSchedules();
-    if(v==='settings')loadSettings();
+    if(v==='settings'){loadSettings();loadSysPrompt();}
   }
   function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
   function agentPanel(key,bodyId,desc,url,external){
@@ -382,6 +389,12 @@
   }
   async function saveConfig(){
     await fetch('/api/config_text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:document.getElementById('sConfig').value})});toast('Config saved — restart to apply');
+  }
+  async function loadSysPrompt(){try{const r=await(await fetch('/api/system_prompt')).json();document.getElementById('sSysPrompt').value=r.prompt||'';}catch(e){}}
+  async function saveSysPrompt(){
+    document.getElementById('sysMsg').innerHTML='<span class="spin"></span>';
+    await fetch('/api/system_prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:document.getElementById('sSysPrompt').value})});
+    document.getElementById('sysMsg').textContent='saved';toast('System prompt saved');
   }
   async function act(action,service){
     toast((service||'all')+': '+action+'…');
