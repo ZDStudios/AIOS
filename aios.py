@@ -1650,6 +1650,24 @@ def cmd_install_cli(args):
         install_cli()
 
 
+def cmd_claude_login(args):
+    """Log the Claude Code CLI into your Pro/Max account (OAuth browser + code)."""
+    claude = shutil.which("claude") or shutil.which("claude.cmd")
+    if not claude:
+        die("`claude` CLI not found. It ships with claude-code-api / Claude Code — install it, "
+            "then re-run.  (npm i -g @anthropic-ai/claude-code)")
+    head("Claude login (Pro / Max)")
+    say(f"{C.GRY}This opens your browser to authorize your Claude subscription. "
+        f"Approve it (or paste the code back here).{C.R}\n")
+    sub = "setup-token" if getattr(args, "token", False) else None
+    cmd = [claude, sub] if sub else [claude]
+    try:
+        subprocess.run(cmd)
+    except KeyboardInterrupt:
+        pass
+    say(f"\n{C.B}Done? Restart so agents pick up the login:{C.R} aios restart claudecode hub")
+
+
 def cmd_url(args):
     _print_urls(load_config())
 
@@ -1784,6 +1802,10 @@ def build_parser():
     s = sub.add_parser("install-cli", help="put `aios` on your PATH so it runs from anywhere")
     s.add_argument("action", nargs="?", choices=["install", "uninstall"], default="install")
     s.set_defaults(func=cmd_install_cli)
+
+    s = sub.add_parser("claude-login", help="log the Claude Code CLI into your Pro/Max account")
+    s.add_argument("--token", action="store_true", help="use `claude setup-token` (long-lived token)")
+    s.set_defaults(func=cmd_claude_login)
 
     sub.add_parser("url", help="print dashboard URLs").set_defaults(func=cmd_url)
     sub.add_parser("wire", help="(re)install the openclaw-os plugin into openclaw").set_defaults(func=cmd_wire)

@@ -423,8 +423,25 @@ class Handler(BaseHTTPRequestHandler):
                 "AIOS_DEFAULT_MODEL": model,
             })
             run_aios("setup", "--non-interactive", "--skip-tools", "--skip-install", "--skip-wire")
-            self._send(200, {"ok": True, "model": model, "reachable": authed,
-                             "note": "" if authed else "claude-code-api didn't answer — start it (`aios start claudecode`) and run `claude` once to log into your Pro/Max account."})
+            # Actually try a tiny completion — this reveals whether the `claude` CLI is logged in.
+            logged_in, detail = False, ""
+            if authed:
+                try:
+                    b = json.dumps({"model": model, "messages": [{"role": "user", "content": "hi"}],
+                                    "max_tokens": 5}).encode()
+                    rq = urllib.request.Request(CLAUDECODE + "/v1/chat/completions", data=b, method="POST",
+                                                headers={"Content-Type": "application/json",
+                                                         "Authorization": "Bearer sk-aios-claudecode"})
+                    urllib.request.urlopen(rq, timeout=45)
+                    logged_in = True
+                except Exception as e:
+                    detail = str(e)[:160]
+            self._send(200, {
+                "ok": True, "model": model, "reachable": authed, "logged_in": logged_in,
+                "note": ("Connected — your Claude subscription is working." if logged_in else
+                         "Pointed at claude-code, but the Claude CLI isn't logged in yet. Run "
+                         "`aios claude-login` (or `claude setup-token`) in a terminal to authorize your "
+                         "Pro/Max account, then chat.")})
         elif self.path == "/api/schedules":
             items = load_schedules()
             op = payload.get("op", "add")

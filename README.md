@@ -166,7 +166,7 @@ Plus two integrations that glue it together:
 - **✦ Team** — one assistant that orchestrates the whole team: the Brain plans, delegates subtasks to the specialist agents, and synthesizes one answer (the practical "merge").
 - **Configure openclaw AND hermes fully inside the hub** — both control-UIs are embedded via frame-stripping proxies, so you get channels, **connectors**, model providers, **MCP servers**, skills, plugins, **automations/cron**, and sessions right in the hub (they normally block embedding).
 - **Automations** — schedule prompts to run against any agent every N minutes (daily digests, checks).
-- **Connect your Claude account (Pro/Max)** — one click in **Settings** points the Brain/Team/crews at **claude-code** (your Claude subscription, no API key or per-token cost) and auto-configures everything.
+- **Connect your Claude account (Pro/Max)** — first run `aios claude-login` (opens the browser OAuth for your subscription), then one click in **Settings → "Use my Claude subscription"** routes the Brain/Team/crews through **claude-code** (no API key, no per-token cost). The button tests a real completion and tells you if you still need to log in.
 - **Settings** — edit provider/key/model, channel tokens, and `aios.config.yaml`; it re-renders into every agent, no terminal needed.
 - **Themes** — Light, Dark, Midnight, Slate, Rose. Chat renders markdown (headers, bullets, code blocks).
 

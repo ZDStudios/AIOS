@@ -239,7 +239,7 @@
           <p>Use your Claude subscription for the Brain, Team and crews — routed through <b>claude-code</b>,
              no API key or per-token cost. One click points everything at it and re-renders.</p>
           <div class="row"><button class="btn primary" onclick="connectClaude()">Use my Claude subscription</button><span id="claudeMsg" class="kv"></span></div>
-          <p class="mono" style="font-size:.76rem;color:var(--text3);margin-top:12px">First time? run <b>claude</b> once in a terminal to log in to your Pro/Max account, then click above.</p>
+          <p style="font-size:.8rem;color:var(--text3);margin-top:12px"><b>The login happens in your terminal, not here.</b> First run <span class="mono" style="color:var(--accent-strong)">aios claude-login</span> — it opens your browser to authorize your Pro/Max account (or paste a code). Then click the button above to route everything through it.</p>
         </div>
         <div class="card">
           <h3>🔑 Model provider</h3>
@@ -378,8 +378,8 @@
   async function connectClaude(){
     document.getElementById('claudeMsg').innerHTML='<span class="spin"></span> connecting…';
     try{const r=await(await fetch('/api/claude_connect',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
-      document.getElementById('claudeMsg').textContent=r.reachable?('connected — model '+r.model+'. Restart agents to apply.'):(r.note||'set, but claude-code-api not reachable');
-      toast(r.reachable?'Connected to your Claude account':'Saved — start claude-code + run `claude` to log in');loadSettings();
+      document.getElementById('claudeMsg').textContent=r.note||(r.logged_in?'connected':'needs login');
+      toast(r.logged_in?'Connected — your Claude subscription works ✓':'Run  aios claude-login  first to log in');loadSettings();
     }catch(e){document.getElementById('claudeMsg').textContent='failed: '+e;}
   }
   async function saveChannels(){
