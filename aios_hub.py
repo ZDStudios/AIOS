@@ -326,6 +326,68 @@ def run_pipeline(message: str, steps: list, history: list | None = None) -> dict
 
 
 # --------------------------------------------------------------------------- #
+# /dry — estimate tokens + cost before actually running a request             #
+# --------------------------------------------------------------------------- #
+_PRICING = {"ts": 0.0, "map": {}}
+
+
+def estimate_tokens(text: str) -> int:
+    return max(1, len(text or "") // 4)  # ~4 chars/token (rough, English)
+
+
+def _model_pricing(model: str):
+    """Per-token USD pricing for the active model (OpenRouter exposes it on /models)."""
+    if os.environ.get("AIOS_LLM_PROVIDER", "openrouter").lower() != "openrouter":
+        return None
+    if time.time() - _PRICING["ts"] > 600 or not _PRICING["map"]:
+        try:
+            data = json.loads(urllib.request.urlopen(llm_base() + "/models", timeout=10).read())
+            m = {}
+            for it in data.get("data", []):
+                p = it.get("pricing") or {}
+                try:
+                    m[it.get("id")] = {"prompt": float(p.get("prompt", 0) or 0),
+                                       "completion": float(p.get("completion", 0) or 0)}
+                except Exception:
+                    pass
+            _PRICING.update(map=m, ts=time.time())
+        except Exception:
+            pass
+    return _PRICING["map"].get(model)
+
+
+def dry_run(target: str, message: str, history: list | None = None) -> dict:
+    history = history or []
+    target = (target or "brain").lower()
+    sysp = read_system_prompt() or ("You are the AIOS Brain, orchestrator of six agents. "
+                                    "Be concise and helpful." * 3)
+    mem = read_memory()
+    ctx = (sysp + "\n" + "\n".join(str(m.get("content", "")) for m in history)
+           + "\n" + "\n".join(str(x) for x in mem) + "\n" + message)
+    in_tok = estimate_tokens(ctx)
+    out_tok = 600
+    model = os.environ.get("AIOS_DEFAULT_MODEL", "(unset)")
+    prov = os.environ.get("AIOS_LLM_PROVIDER", "openrouter").lower()
+    # multi-agent modes call the model several times
+    mult = {"arena": 2, "team": 2, "council": 4, "pipeline": 3, "all": 4}.get(target, 1)
+    free = prov == "claudecode"
+    cost, priced, note = 0.0, False, ""
+    if free:
+        note = "Runs on your Claude Pro/Max subscription — $0 API cost."
+    else:
+        pr = _model_pricing(model)
+        if pr:
+            cost = (in_tok * pr["prompt"] + out_tok * pr["completion"]) * mult
+            priced = True
+        else:
+            note = "No public pricing for this model — token estimate only."
+    return {"target": target, "model": model, "provider": prov, "agents": mult,
+            "input_tokens": in_tok, "est_output_tokens": out_tok * mult,
+            "total_tokens": (in_tok + out_tok) * mult,
+            "free": free, "priced": priced, "est_cost_usd": round(cost, 6), "note": note}
+
+
+# --------------------------------------------------------------------------- #
 # "Team" — a single agent that orchestrates the others (the practical merge)   #
 # --------------------------------------------------------------------------- #
 AGENT_TOOLS = {
@@ -580,6 +642,9 @@ class Handler(BaseHTTPRequestHandler):
                          "Pointed at claude-code, but the Claude CLI isn't logged in yet. Run "
                          "`aios claude-login` (or `claude setup-token`) in a terminal to authorize your "
                          "Pro/Max account, then chat.")})
+        elif self.path == "/api/dryrun":
+            self._send(200, dry_run(payload.get("target", "brain"), payload.get("message", ""),
+                                    payload.get("history", [])))
         elif self.path == "/api/route_auto":
             self._send(200, auto_route(payload.get("message", ""), payload.get("history", [])))
         elif self.path == "/api/arena":

@@ -6,41 +6,20 @@
 <title>The AI OS — Workspace</title>
 <style>
   /* openclaw-os–inspired design tokens (neutral surfaces + indigo accent) */
+  /* Default theme: "Hermes" — warm charcoal + gold, classical. Themes are applied
+     as CSS variables from JS (see THEMES) so the theme store can add custom ones. */
   :root{
-    --bg:#ffffff; --surface:#f6f6f6; --sunk:#f0f0f0; --sunk2:#e9e9e9;
-    --elevated:#ffffff; --border:#e2e2e2; --border-strong:#d4d4d4;
-    --text:#1a1a1a; --text2:#525252; --text3:#8a8a8a;
-    --accent:#6366f1; --accent-strong:#4f46e5; --accent-soft:#eef2ff; --accent-soft2:#e0e7ff;
-    --success:#2b8a3e; --success-bg:#ebfbee; --danger:#e03131; --danger-bg:#fff5f5;
-    --alert:#e67700; --info:#1971c2;
-    --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.06);
+    --bg:#15120c; --surface:#1c1811; --sunk:#100d08; --sunk2:#241f16;
+    --elevated:#221c14; --border:#33291d; --border-strong:#4a3c29;
+    --text:#f0e8d6; --text2:#bcac8f; --text3:#8a7c62;
+    --accent:#caa63f; --accent-strong:#e3c15f; --accent-soft:#241c0f; --accent-soft2:#352810;
+    --success:#93b06c; --success-bg:#1d2513; --danger:#d17457; --danger-bg:#2b1811;
+    --alert:#d9a441; --info:#8bb0cf;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
     --mono:ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace;
     --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    --r:10px;
-  }
-  :root[data-theme="dark"]{
-    --bg:#141414; --surface:#1a1a1a; --sunk:#0f0f0f; --sunk2:#181818;
-    --elevated:#262626; --border:#2e2e2e; --border-strong:#3d3d3d;
-    --text:#e6e6e6; --text2:#a3a3a3; --text3:#7a7a7a;
-    --accent:#818cf8; --accent-strong:#a5b4fc; --accent-soft:#1f1f2e; --accent-soft2:#262640;
-    --success:#69db7c; --success-bg:#152a15; --danger:#ff8787; --danger-bg:#2c1515;
-    --alert:#ffd43b; --info:#74c0fc;
-    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
-  }
-  :root[data-theme="midnight"]{
-    --bg:#0b1020; --surface:#111834; --sunk:#0a0f1e; --sunk2:#151d3a; --elevated:#141c38; --border:#233056; --border-strong:#334268;
-    --text:#e6ecff; --text2:#9fb0d8; --text3:#6b7aa8; --accent:#60a5fa; --accent-strong:#93c5fd; --accent-soft:#132043; --accent-soft2:#1c2c58;
-    --success:#4ade80; --success-bg:#0f2a1a; --danger:#fb7185; --danger-bg:#2a1220; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.5);
-  }
-  :root[data-theme="slate"]{
-    --bg:#1c1f26; --surface:#22262f; --sunk:#181b21; --sunk2:#272c37; --elevated:#282d38; --border:#363c49; --border-strong:#454c5c;
-    --text:#e7eaf0; --text2:#a6adbb; --text3:#727a8a; --accent:#34d399; --accent-strong:#6ee7b7; --accent-soft:#122a22; --accent-soft2:#173a2e;
-    --success:#34d399; --success-bg:#122a22; --danger:#f87171; --danger-bg:#2a1717; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.4);
-  }
-  :root[data-theme="rose"]{
-    --bg:#fff7f9; --surface:#fdeef2; --sunk:#f8e2e9; --sunk2:#f3d7e0; --elevated:#ffffff; --border:#f0d0da; --border-strong:#e5b4c2;
-    --text:#3d1f2b; --text2:#7a5561; --text3:#a98593; --accent:#e11d74; --accent-strong:#be185d; --accent-soft:#fce7f0; --accent-soft2:#fbcfe1;
-    --success:#2b8a3e; --success-bg:#ebfbee; --danger:#e03131; --danger-bg:#fff5f5; --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(190,24,93,.08);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --r:8px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
@@ -51,16 +30,16 @@
 
   /* top bar */
   header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
-  .brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em}
-  .brand .logo{width:26px;height:26px;border-radius:7px;background:var(--accent);display:grid;place-items:center;font-size:14px;color:#fff}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:.01em;font-family:var(--serif);font-size:1.05rem}
+  .brand .logo{width:27px;height:27px;border-radius:7px;background:var(--accent);display:grid;place-items:center;font-size:14px;color:#1a1408}
   .brand small{color:var(--text3);font-weight:500;font-size:.8rem}
   .top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
   .icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--elevated);color:var(--text2);display:grid;place-items:center;font-size:15px}
   .icon-btn:hover{border-color:var(--border-strong);color:var(--text)}
   .btn{border:1px solid var(--border);background:var(--elevated);color:var(--text);border-radius:8px;padding:8px 13px;font-weight:600;font-size:.85rem;display:inline-flex;align-items:center;gap:6px}
   .btn:hover{border-color:var(--border-strong)}
-  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-strong));border-color:var(--accent);color:#fff}
-  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#1a1408;font-weight:700}
+  .btn.primary:hover{background:var(--accent-strong)}
   .btn.danger{color:var(--danger);border-color:var(--border)}
   .btn.sm{padding:5px 10px;font-size:.8rem}
 
@@ -81,7 +60,7 @@
   .view{position:absolute;inset:0;display:none;flex-direction:column}
   .view.active{display:flex}
   .vhead{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
-  .vhead h2{font-size:1.05rem;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .vhead h2{font-size:1.15rem;font-weight:600;letter-spacing:.005em;display:flex;align-items:center;gap:9px;font-family:var(--serif)}
   .vhead .sub{color:var(--text3);font-size:.85rem}
   .vhead .right{margin-left:auto;display:flex;gap:8px}
   .vbody{flex:1;overflow-y:auto;min-height:0}
@@ -111,7 +90,7 @@
   textarea,input,select{font-family:var(--sans);font-size:.9rem;color:var(--text);background:var(--elevated);border:1px solid var(--border-strong);border-radius:9px;padding:10px 12px}
   textarea:focus,input:focus,select:focus{outline:none;border-color:var(--accent)}
   .inrow textarea{flex:1;resize:none;max-height:150px;min-height:44px;line-height:1.5}
-  .send{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:0 20px;height:44px;font-weight:650}
+  .send{background:var(--accent);color:#1a1408;border:0;border-radius:9px;padding:0 20px;height:44px;font-weight:700}
   .send:hover{background:var(--accent-strong)}
   .send:disabled{opacity:.5}
 
@@ -188,13 +167,7 @@
   <div class="brand"><span class="logo">◆</span> The AI OS <small>Workspace</small></div>
   <div class="top-actions">
     <button class="btn sm" onclick="act('restart')">↻ Restart all</button>
-    <select id="themeSel" onchange="applyTheme(this.value)" title="Theme" style="padding:7px 10px;font-size:.82rem">
-      <option value="light">☀️ Light</option>
-      <option value="dark">🌙 Dark</option>
-      <option value="midnight">🌌 Midnight</option>
-      <option value="slate">🪨 Slate</option>
-      <option value="rose">🌹 Rose</option>
-    </select>
+    <select id="themeSel" onchange="applyTheme(this.value)" title="Theme" style="padding:7px 10px;font-size:.82rem"></select>
   </div>
 </header>
 
@@ -245,7 +218,7 @@
           </div>
           <div class="inrow">
             <button class="mic" id="micBtn" onclick="toggleMic()" title="Voice input">🎙️</button>
-            <textarea id="input" placeholder="Message The AI OS…  ( / for prompts · Enter to send )"></textarea>
+            <textarea id="input" placeholder="Message The AI OS…  ( /dry to estimate cost · / for prompts · Enter to send )"></textarea>
             <button class="send" id="send" onclick="send()">Send</button>
           </div>
           <div class="hint" style="margin-top:7px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
@@ -352,6 +325,14 @@
         </div>
 
         <div class="card">
+          <h3>🎨 Theme store</h3>
+          <p>Pick a theme, or install your own — paste a JSON of CSS variables. Themes are saved in your browser.</p>
+          <div id="themeGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;margin-top:14px"></div>
+          <div class="field" style="margin-top:16px"><label>Install a custom theme (JSON)</label><textarea id="themeJson" rows="4" class="mono" style="font-size:.78rem" placeholder='{"name":"mytheme","label":"My Theme","dark":true,"vars":{"--bg":"#101010","--accent":"#ff6600"}}'></textarea></div>
+          <div class="row"><button class="btn primary" onclick="installTheme()">Install theme</button><a onclick="copyThemeTemplate()" style="cursor:pointer;color:var(--accent-strong);font-size:.8rem">use current theme as a template</a></div>
+        </div>
+
+        <div class="card">
           <h3>🧩 Advanced — aios.config.yaml</h3>
           <p>Ports, enabled services, health URLs. Edit and save, then restart.</p>
           <div class="field" style="margin-top:12px"><textarea id="sConfig" rows="12" class="mono" style="width:100%;font-size:.82rem"></textarea></div>
@@ -380,10 +361,29 @@
   const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥",claudecode:"◈","openclaw-os":"🪟",hub:"◆",brain:"◆",team:"✦",all:"🌐"};
   let target="brain", peers={}, svc={}, history=[];
 
-  // themes
+  // ── themes (applied as CSS vars from JS → enables the theme store) ──
   const rootEl=document.documentElement;
-  function applyTheme(t){rootEl.setAttribute('data-theme',t);localStorage.aiosTheme=t;const s=document.getElementById('themeSel');if(s)s.value=t;}
-  applyTheme(localStorage.aiosTheme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+  const THEMES={
+    hermes:{label:'Hermes · gold',dark:true,vars:{'--bg':'#15120c','--surface':'#1c1811','--sunk':'#100d08','--sunk2':'#241f16','--elevated':'#221c14','--border':'#33291d','--border-strong':'#4a3c29','--text':'#f0e8d6','--text2':'#bcac8f','--text3':'#8a7c62','--accent':'#caa63f','--accent-strong':'#e3c15f','--accent-soft':'#241c0f','--accent-soft2':'#352810','--success':'#93b06c','--success-bg':'#1d2513','--danger':'#d17457','--danger-bg':'#2b1811','--alert':'#d9a441','--info':'#8bb0cf','--shadow':'0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45)'}},
+    openclaw:{label:'OpenClaw · coral',dark:true,vars:{'--bg':'#1a1210','--surface':'#231916','--sunk':'#140d0b','--sunk2':'#2c1f1a','--elevated':'#291d18','--border':'#3d2a23','--border-strong':'#54382f','--text':'#f4e8e3','--text2':'#c9aca3','--text3':'#977a72','--accent':'#e5573f','--accent-strong':'#f2795f','--accent-soft':'#2a1512','--accent-soft2':'#3b1c16','--success':'#7fb069','--success-bg':'#1a2413','--danger':'#e5573f','--danger-bg':'#2c1712','--alert':'#e0a15a','--info':'#8bb0cf','--shadow':'0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45)'}},
+    olympus:{label:'Olympus · light',dark:false,vars:{'--bg':'#f7f2e7','--surface':'#efe7d6','--sunk':'#e6dcc5','--sunk2':'#ddd0b5','--elevated':'#fffdf6','--border':'#ddceb0','--border-strong':'#c7b48d','--text':'#2c2416','--text2':'#5e5340','--text3':'#8b7d62','--accent':'#a97e1f','--accent-strong':'#8a6414','--accent-soft':'#f2e9d1','--accent-soft2':'#e8d9b6','--success':'#4a8a3e','--success-bg':'#e9f4e2','--danger':'#c0503a','--danger-bg':'#f8e9e4','--alert':'#a97e1f','--info':'#3a6f97','--shadow':'0 1px 2px rgba(120,90,20,.06),0 8px 24px rgba(120,90,20,.08)'}},
+    obsidian:{label:'Obsidian · slate',dark:true,vars:{'--bg':'#0e0f11','--surface':'#161719','--sunk':'#0a0b0c','--sunk2':'#1d1e21','--elevated':'#1b1c1f','--border':'#2a2b2f','--border-strong':'#3a3b40','--text':'#e9e9ec','--text2':'#a2a3aa','--text3':'#6e6f78','--accent':'#7aa2c4','--accent-strong':'#9cbfda','--accent-soft':'#151b22','--accent-soft2':'#1c2530','--success':'#6bbf7b','--success-bg':'#132015','--danger':'#e07a6a','--danger-bg':'#241615','--alert':'#d6b25a','--info':'#7aa2c4','--shadow':'0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.5)'}},
+    forest:{label:'Forest · green',dark:true,vars:{'--bg':'#0e140f','--surface':'#141c15','--sunk':'#0a0f0b','--sunk2':'#1a241b','--elevated':'#182018','--border':'#26331f','--border-strong':'#38492e','--text':'#e6efe0','--text2':'#a7bda0','--text3':'#748a6f','--accent':'#6fae5a','--accent-strong':'#8bc978','--accent-soft':'#14200f','--accent-soft2':'#1d3016','--success':'#6fae5a','--success-bg':'#14200f','--danger':'#d2795e','--danger-bg':'#241612','--alert':'#cbb15a','--info':'#7fa9a0','--shadow':'0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.45)'}},
+    rose:{label:'Rose · light',dark:false,vars:{'--bg':'#fdf6f4','--surface':'#f9eae6','--sunk':'#f3ddd7','--sunk2':'#eed0c8','--elevated':'#fffcfb','--border':'#f0d4cc','--border-strong':'#e0b3a8','--text':'#3a2620','--text2':'#7c584f','--text3':'#a9857b','--accent':'#c65f4a','--accent-strong':'#a94a37','--accent-soft':'#fae9e4','--accent-soft2':'#f5d5cc','--success':'#4a8a3e','--success-bg':'#eaf4e5','--danger':'#c0503a','--danger-bg':'#fae6e1','--alert':'#c08a2a','--info':'#3a6f97','--shadow':'0 1px 2px rgba(150,60,40,.06),0 8px 24px rgba(150,60,40,.08)'}},
+  };
+  function customThemes(){try{return JSON.parse(localStorage.aiosCustomThemes||'{}')}catch(e){return{}}}
+  function allThemes(){return Object.assign({},THEMES,customThemes());}
+  function applyTheme(name){const th=allThemes();const t=th[name]||th.hermes;rootEl.style.colorScheme=t.dark?'dark':'light';Object.entries(t.vars).forEach(([k,v])=>rootEl.style.setProperty(k,v));localStorage.aiosTheme=(th[name]?name:'hermes');const s=document.getElementById('themeSel');if(s)s.value=localStorage.aiosTheme;try{renderThemeStore();}catch(e){}}
+  function renderThemeSelect(){const s=document.getElementById('themeSel');if(!s)return;s.innerHTML=Object.entries(allThemes()).map(([k,t])=>`<option value="${k}">${t.label}</option>`).join('');s.value=localStorage.aiosTheme||'hermes';}
+  function renderThemeStore(){const g=document.getElementById('themeGrid');if(!g)return;const th=allThemes(),cur=localStorage.aiosTheme;
+    g.innerHTML=Object.entries(th).map(([k,t])=>{const v=t.vars;return `<div onclick="applyTheme('${k}')" title="${t.label}" style="cursor:pointer;border:2px solid ${k===cur?v['--accent']:'var(--border)'};border-radius:10px;overflow:hidden">
+      <div style="height:44px;background:${v['--bg']};position:relative"><span style="position:absolute;bottom:7px;left:8px;width:20px;height:20px;border-radius:50%;background:${v['--accent']}"></span><span style="position:absolute;bottom:9px;left:32px;width:44px;height:8px;border-radius:4px;background:${v['--border-strong']}"></span></div>
+      <div style="padding:7px 9px;font-size:.78rem;font-weight:600;color:${v['--text']};background:${v['--surface']}">${t.label}${k===cur?' ✓':''}${customThemes()[k]?' <span onclick="event.stopPropagation();delTheme(\''+k+'\')" style="float:right;color:'+v['--danger']+';cursor:pointer">✕</span>':''}</div></div>`;}).join('');}
+  function installTheme(){try{const o=JSON.parse(document.getElementById('themeJson').value);if(!o.name||!o.vars)throw new Error('needs "name" and "vars"');const c=customThemes();c[o.name]={label:o.label||o.name,dark:!!o.dark,vars:o.vars};localStorage.aiosCustomThemes=JSON.stringify(c);renderThemeSelect();applyTheme(o.name);document.getElementById('themeJson').value='';toast('Theme installed: '+(o.label||o.name));}catch(e){toast('Invalid theme JSON — '+e.message);}}
+  function delTheme(k){const c=customThemes();delete c[k];localStorage.aiosCustomThemes=JSON.stringify(c);if(localStorage.aiosTheme===k)applyTheme('hermes');renderThemeSelect();renderThemeStore();}
+  function copyThemeTemplate(){const cur=allThemes()[localStorage.aiosTheme||'hermes'];document.getElementById('themeJson').value=JSON.stringify({name:'mytheme',label:'My Theme',dark:cur.dark,vars:cur.vars},null,2);}
+  renderThemeSelect();
+  applyTheme(localStorage.aiosTheme||'hermes');
 
   function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 
@@ -399,7 +399,7 @@
     if(v==='claudecode')agentPanel('claudecode','claudecodeBody','Claude Code exposed as an OpenAI-compatible API. Chat with it (target “claude-code”), or point any tool at <span class="mono">'+(peers.claudecode||'http://127.0.0.1:8000')+'/v1</span>. Needs the <span class="mono">claude</span> CLI installed + authenticated.',peers.claudecode);
     if(v==='automations')loadSchedules();
     if(v==='memory'){loadMem();loadPrompts();}
-    if(v==='settings'){loadSettings();loadSysPrompt();loadModels();}
+    if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();}
   }
   function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
   function agentPanel(key,bodyId,desc,url,external){
@@ -461,8 +461,31 @@
   let PROMPTS=[];
   function expandSlash(t){if(t[0]!=='/')return t;const n=t.slice(1).split(/\s/)[0];const p=PROMPTS.find(p=>p.name===n);return p?p.text+t.slice(1+n.length):t;}
   function speak(t){try{const u=new SpeechSynthesisUtterance((t||'').replace(/[#*`>|]/g,'').replace(/\n+/g,'. ').slice(0,700));speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
+  async function doDry(q){
+    if(!q){toast('Usage: /dry <your message>');return;}
+    let c=curConv();if(!c){newConv();c=curConv();}
+    const box=document.getElementById('msgs');if(!c.msgs.length)box.innerHTML='';
+    box.appendChild(msgEl('user','/dry '+q));
+    const h=msgEl('assistant','',target);h.querySelector('.av').textContent='🔍';box.appendChild(h);box.scrollTop=box.scrollHeight;
+    try{const hist=c.msgs.filter(m=>m.role).slice(-13).map(m=>({role:m.role,content:m.content}));
+      const d=await api('/api/dryrun',{target,message:q,history:hist});
+      const cost=d.free?'**Free** — runs on your Claude subscription':(d.priced?('**~$'+d.est_cost_usd.toFixed(6)+'**'):'unknown');
+      const md=`### 🔍 Dry run — nothing was sent to an agent\n`+
+        `- **Target:** ${d.target}${d.agents>1?' · '+d.agents+' model calls':''}\n`+
+        `- **Model:** \`${d.model}\`\n`+
+        `- **Input:** ~${(d.input_tokens||0).toLocaleString()} tokens\n`+
+        `- **Est. output:** ~${(d.est_output_tokens||0).toLocaleString()} tokens\n`+
+        `- **Total:** ~${(d.total_tokens||0).toLocaleString()} tokens\n`+
+        `- **Est. cost:** ${cost}\n`+
+        (d.note&&!d.free?`\n_${d.note}_`:'')+`\n\n_Estimate: ~4 chars/token; real usage varies._`;
+      h.querySelector('.bubble').innerHTML=mdRender(md);
+    }catch(e){h.querySelector('.bubble').textContent='Dry run failed: '+e;}
+    box.scrollTop=1e9;
+  }
   async function send(){
-    let text=input.value.trim();if(!text)return;text=expandSlash(text);input.value='';input.style.height='44px';
+    let text=input.value.trim();if(!text)return;
+    if(/^\/dry(run)?\b/i.test(text)){input.value='';input.style.height='44px';return doDry(text.replace(/^\/dry(run)?\s*/i,''));}
+    text=expandSlash(text);input.value='';input.style.height='44px';
     let c=curConv();if(!c){newConv();c=curConv();}
     c.msgs.push({role:'user',content:text});c.target=target;if(!c.title||c.title==='New conversation')c.title=text.slice(0,42);c.ts=Date.now();saveConvs();renderConvs();
     const box=document.getElementById('msgs');if(c.msgs.length===1)box.innerHTML='';box.appendChild(msgEl('user',text));

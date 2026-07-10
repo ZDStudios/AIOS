@@ -201,6 +201,10 @@ curl http://127.0.0.1:8787/v1/models         # list targets
 
 **Chat is now a 3-column workspace** — conversation history (pinned / today / earlier) · transcript · live agent panel — with saved conversations.
 
+**`/dry` cost estimator:** type `/dry <your message>` in chat to estimate the **tokens and cost** before running — using live per-model pricing (and $0 when on your Claude subscription). Multi-agent modes (Arena/Council/Pipeline) account for the extra calls.
+
+**Refined theming + theme store:** the default is a warm, classical **Hermes** theme (charcoal + gold, serif headings) — plus **OpenClaw** (coral), **Olympus** (light), **Obsidian**, **Forest**, and **Rose**. **Settings → Theme store** lets you preview and apply any theme, or **install your own** by pasting a JSON of CSS variables.
+
 **Skills & system prompt:** 10 skills ship built-in (skill-maker, mcp-maker, web-search, web-browse, image-gen, code-review, summarize, research, data-analyst, task-scheduler) and mount into every agent. Edit the Brain/Team **system prompt** live in the hub → **Settings**.
 
 **On WSL?** `127.0.0.1:8787` often won't reach WSL from your Windows browser (localhost-forwarding is flaky). `aios start`/`aios url` now print your **WSL IP** URL — use that (e.g. `http://172.31.x.x:8787/`). The hub binds `0.0.0.0` so the WSL IP always works.
