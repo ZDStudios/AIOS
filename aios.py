@@ -510,7 +510,47 @@ def interconnect_env(cfg: dict) -> dict:
         "AIOS_OPENCLAWPROXY_URL": f"http://127.0.0.1:{pxp}/",
         "AIOS_HERMESPROXY_URL": f"http://127.0.0.1:{hxp}/",
         "AIOS_OPENCLAWOS_URL": f"http://127.0.0.1:{clp}/plugins/openclawos/",
+        **full_control_env(cfg),
     }
+
+
+def full_control_env(cfg: dict) -> dict:
+    """Give every agent the machine.
+
+    Each project already has a supported switch for this — none of these are hacks:
+      opencode      OPENCODE_PERMISSION merges into config.permission ({"*": "allow"})
+      claude-code   claude-code-api already passes --dangerously-skip-permissions
+      openclaw      `openclaw exec-policy preset yolo` (applied in wire_full_control)
+      hermes        runs unattended in server mode; ACP edits auto-approve per session
+      crewai + hub  our own services — they honour AIOS_FULL_CONTROL directly
+
+    Paired with a real gate (see aios_sec.py): full control + an unauthenticated
+    control plane is how OpenClaw earned CVE-2026-25253, so the hub refuses any
+    non-loopback or cross-origin request that doesn't carry AIOS_HUB_TOKEN.
+    """
+    fc = bool(cfg_get(cfg, "security.full_control", True))
+    env = {
+        "AIOS_FULL_CONTROL": "1" if fc else "0",
+        "AIOS_GUARDRAILS": "1" if cfg_get(cfg, "security.guardrails", True) else "0",
+        "AIOS_EXEC_TIMEOUT": str(cfg_get(cfg, "security.exec_timeout", 120)),
+        "AIOS_ACTIVE_MEMORY": "1" if cfg_get(cfg, "memory.active", True) else "0",
+        "AIOS_SKILL_LEARN": "1" if cfg_get(cfg, "skills.learn", True) else "0",
+        "AIOS_PROFILE": os.environ.get("AIOS_PROFILE", cfg_get(cfg, "profile", "default")),
+    }
+    if fc:
+        # opencode: allow every tool without prompting. Its config loader merges this
+        # JSON into `permission`, and a bare "*" key applies to all tools.
+        env["OPENCODE_PERMISSION"] = json.dumps({"*": "allow"})
+        # hermes: don't auto-deny when a subagent hits a dangerous-command prompt.
+        env["HERMES_SUBAGENT_AUTO_APPROVE"] = "1"
+        env["HERMES_ACP_AUTO_APPROVE"] = "session"
+    token = load_env(ROOT / ".env").get("AIOS_HUB_TOKEN", "") or os.environ.get("AIOS_HUB_TOKEN", "")
+    if token:
+        env["AIOS_HUB_TOKEN"] = token
+    hosts = cfg_get(cfg, "security.allowed_hosts", "")
+    if hosts:
+        env["AIOS_ALLOWED_HOSTS"] = str(hosts)
+    return env
 
 
 # --------------------------------------------------------------------------- #
@@ -763,6 +803,11 @@ def cmd_setup(args):
     # 7) wire openclaw-os plugin (best-effort; needs openclaw runnable)
     if cfg_get(cfg, "services.openclaw_os.enabled", True) and not args.skip_wire:
         wire_openclaw_os(quiet=True)
+
+    # 7b) hand the agents the machine, and mint the token that keeps that safe
+    ensure_hub_token()
+    if not args.skip_wire:
+        wire_full_control(cfg)
 
     # 8) offer to install the global `aios` command + autostart
     interactive = sys.stdin.isatty() and not args.non_interactive
@@ -1201,6 +1246,54 @@ def wire_openclaw_os(quiet=False):
         return True
     warn(f"plugin install exited {rc} — retry with: aios wire")
     return False
+
+
+def wire_full_control(cfg: dict, quiet=False):
+    """Flip openclaw into unattended exec. Everything else takes an env var; openclaw
+    keeps exec policy in its config + approvals file, and `exec-policy preset yolo`
+    is the supported way to set both at once."""
+    if not cfg_get(cfg, "security.full_control", True):
+        return False
+    if not quiet:
+        head("Granting full machine control")
+    cl = PROJECTS["openclaw"]
+    node = find_tool("node")
+    if not (cl and node):
+        warn("openclaw not present; skipping its exec policy")
+        return False
+    env = child_env(openclaw_env())
+    cmd = [node, "openclaw.mjs", "exec-policy", "preset", "yolo"]
+    r = subprocess.run(cmd, cwd=str(cl), env=env, capture_output=True, text=True)
+    if r.returncode == 0:
+        ok("openclaw: exec policy = yolo (unattended shell, no approval prompts)")
+    else:
+        warn(f"openclaw exec-policy failed ({r.returncode}) — run manually: "
+             f"cd {cl} && node openclaw.mjs exec-policy preset yolo")
+    ok("opencode: all tools allowed (OPENCODE_PERMISSION)")
+    ok("claude-code: --dangerously-skip-permissions (already default)")
+    ok("hub + crewai: shell tool enabled")
+    if cfg_get(cfg, "security.guardrails", True):
+        ok("guardrails ON — `rm -rf /`, mkfs, fork bombs and friends still refused")
+    else:
+        warn("guardrails OFF — nothing is refused")
+    return r.returncode == 0
+
+
+def ensure_hub_token(quiet=False) -> str:
+    """Generate the token that lets the hub survive being bound to 0.0.0.0."""
+    envf = ROOT / ".env"
+    cur = load_env(envf).get("AIOS_HUB_TOKEN", "").strip()
+    if cur:
+        return cur
+    sys.path.insert(0, str(ROOT))
+    import aios_sec
+    tok = aios_sec.new_token()
+    line = f"AIOS_HUB_TOKEN={tok}\n"
+    with open(envf, "a", encoding="utf-8") as f:
+        f.write(line if envf.exists() and envf.read_text(encoding="utf-8").endswith("\n") else "\n" + line)
+    if not quiet:
+        ok("generated AIOS_HUB_TOKEN (.env) — required for non-loopback access")
+    return tok
 
 
 def cmd_start(args):
@@ -1674,10 +1767,106 @@ def cmd_claude_login(args):
 
 def cmd_url(args):
     _print_urls(load_config())
+    tok = load_env(ROOT / ".env").get("AIOS_HUB_TOKEN", "")
+    if tok and _is_wsl():
+        port = cfg_get(load_config(), "services.hub.port", 8787)
+        say(f"\n{C.B}From Windows (needs the token — loopback doesn't):{C.R}\n"
+            f"  http://{_wsl_ip()}:{port}/?token={tok}")
 
 
 def cmd_wire(args):
     wire_openclaw_os(quiet=False)
+    wire_full_control(load_config())
+
+
+def cmd_token(args):
+    """Print (or rotate) the hub token."""
+    if getattr(args, "rotate", False):
+        envf = ROOT / ".env"
+        if envf.exists():
+            lines = [l for l in envf.read_text(encoding="utf-8").splitlines()
+                     if not l.startswith("AIOS_HUB_TOKEN=")]
+            envf.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        tok = ensure_hub_token(quiet=True)
+        ok(f"rotated — restart the hub: aios restart hub")
+    else:
+        tok = ensure_hub_token(quiet=True)
+    print(tok)
+
+
+def cmd_exec(args):
+    """Run a command through the same guardrailed, audited path the agents use."""
+    sys.path.insert(0, str(ROOT))
+    cfg = load_config()
+    os.environ.update(full_control_env(cfg))
+    import aios_tools
+    r = aios_tools.shell(" ".join(args.command), actor="cli")
+    if r["out"]:
+        print(r["out"], end="" if r["out"].endswith("\n") else "\n")
+    if r["err"]:
+        print(r["err"], file=sys.stderr)
+    sys.exit(0 if r["ok"] else 1)
+
+
+def cmd_channels(args):
+    """List every messaging channel the gateway can bridge, and which are configured."""
+    sys.path.insert(0, str(ROOT))
+    import aios_tools
+    chans = aios_tools.channels()
+    head(f"Channels ({len(chans)} available)")
+    for c in chans:
+        mark = f"{C.GRN}✓{C.R}" if c["configured"] else f"{C.GRY}·{C.R}"
+        need = (" needs " + ", ".join(c["envVars"])) if c["envVars"] and not c["configured"] else ""
+        say(f"  {mark} {c['id']:<20} {C.GRY}{c['blurb'][:52]}{C.R}{C.YEL}{need}{C.R}")
+    say(f"\n{C.GRY}Configure from the hub → Channels, or put the env vars in .env{C.R}")
+
+
+def cmd_attach(args):
+    """Jump into a running OpenClaw gateway session with an external harness."""
+    cl = PROJECTS["openclaw"]
+    node = find_tool("node")
+    if not (cl and node):
+        die("openclaw or node not found")
+    cmd = [node, "openclaw.mjs", "attach"] + list(args.args or [])
+    say(f"{C.GRY}$ {' '.join(cmd)}{C.R}")
+    try:
+        sys.exit(subprocess.run(cmd, cwd=str(cl), env=child_env(openclaw_env())).returncode)
+    except KeyboardInterrupt:
+        pass
+
+
+def cmd_migrate(args):
+    """Import settings, memories, skills and keys from an existing OpenClaw install."""
+    hm = PROJECTS["hermes"]
+    if not hm:
+        die("hermes not found")
+    uv = find_tool("uv")
+    base = [uv, "run", "hermes"] if uv else [sys.executable, "-m", "hermes_cli"]
+    cmd = base + ["claw", "migrate"]
+    if getattr(args, "source", None):
+        cmd += ["--source", args.source]
+    if getattr(args, "dry_run", False):
+        cmd += ["--dry-run"]
+    say(f"{C.GRY}$ {' '.join(cmd)}{C.R}")
+    sys.exit(subprocess.run(cmd, cwd=str(hm), env=child_env({})).returncode)
+
+
+def cmd_profile(args):
+    """Isolated agents per client/project on one machine — separate brain, same infra."""
+    prof = getattr(args, "name", None)
+    base = ROOT / ".aios" / "profiles"
+    if not prof:
+        head("Profiles")
+        cur = os.environ.get("AIOS_PROFILE", "default")
+        say(f"  {C.GRN}*{C.R} default" if cur == "default" else "    default")
+        if base.exists():
+            for d in sorted(p for p in base.iterdir() if p.is_dir()):
+                say(f"  {C.GRN}*{C.R} {d.name}" if cur == d.name else f"    {d.name}")
+        say(f"\n{C.GRY}Use one:{C.R} AIOS_PROFILE=<name> aios start   "
+            f"{C.GRY}(its own memory, tasks, flows){C.R}")
+        return
+    (base / prof).mkdir(parents=True, exist_ok=True)
+    ok(f"profile '{prof}' ready — start it with:  AIOS_PROFILE={prof} aios start")
 
 
 # --------------------------------------------------------------------------- #
@@ -1812,7 +2001,31 @@ def build_parser():
     s.set_defaults(func=cmd_claude_login)
 
     sub.add_parser("url", help="print dashboard URLs").set_defaults(func=cmd_url)
-    sub.add_parser("wire", help="(re)install the openclaw-os plugin into openclaw").set_defaults(func=cmd_wire)
+    sub.add_parser("wire", help="(re)install the openclaw-os plugin + re-apply full control").set_defaults(func=cmd_wire)
+
+    s = sub.add_parser("token", help="print the hub token (needed for non-loopback access)")
+    s.add_argument("--rotate", action="store_true", help="generate a fresh token")
+    s.set_defaults(func=cmd_token)
+
+    s = sub.add_parser("exec", help="run a command through the agents' guardrailed, audited shell")
+    s.add_argument("command", nargs=argparse.REMAINDER)
+    s.set_defaults(func=cmd_exec)
+
+    sub.add_parser("channels", help="list the 28 messaging channels and which are configured"
+                   ).set_defaults(func=cmd_channels)
+
+    s = sub.add_parser("attach", help="jump into a running OpenClaw gateway session mid-run")
+    s.add_argument("args", nargs=argparse.REMAINDER)
+    s.set_defaults(func=cmd_attach)
+
+    s = sub.add_parser("migrate", help="import settings/memory/skills/keys from an OpenClaw install")
+    s.add_argument("--source", help="path to the OpenClaw dir (default: ~/.openclaw)")
+    s.add_argument("--dry-run", action="store_true", help="preview only")
+    s.set_defaults(func=cmd_migrate)
+
+    s = sub.add_parser("profile", help="isolated agents per client/project (own memory + tasks)")
+    s.add_argument("name", nargs="?", help="create/select a profile; omit to list")
+    s.set_defaults(func=cmd_profile)
     return p
 
 

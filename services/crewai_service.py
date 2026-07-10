@@ -72,7 +72,30 @@ def _peer_tool():
             except Exception as e:
                 return f"(could not add widget: {e})"
 
-        return [ask_peer, build_dashboard_ui]
+        @tool("run_shell")
+        def run_shell(command: str) -> str:
+            """Run a shell command on this machine (AIOS full control). Guardrailed and
+            audited by the hub. Use for inspecting files, git, builds, checking services."""
+            if os.environ.get("AIOS_FULL_CONTROL", "1") != "1":
+                return "(full control disabled)"
+            body = json.dumps({"command": command, "actor": "crewai"}).encode()
+            req = urllib.request.Request(HUB + "/api/exec", data=body, method="POST",
+                                         headers={"Content-Type": "application/json",
+                                                  "Authorization": "Bearer " +
+                                                  os.environ.get("AIOS_HUB_TOKEN", "")})
+            try:
+                with urllib.request.urlopen(req, timeout=180) as r:
+                    d = json.loads(r.read())
+                    if d.get("blocked"):
+                        return "BLOCKED: " + d.get("err", "")
+                    return (d.get("out") or "") + (("\n[stderr] " + d["err"]) if d.get("err") else "")
+            except Exception as e:
+                return f"(shell error: {e})"
+
+        tools = [ask_peer, build_dashboard_ui]
+        if os.environ.get("AIOS_FULL_CONTROL", "1") == "1":
+            tools.append(run_shell)
+        return tools
     except Exception:
         return []
 
@@ -91,11 +114,12 @@ def run_crew(message: str) -> str:
     operative = Agent(
         role="AIOS Crew Operative",
         goal="Solve the user's request, delegating to other AI OS agents when useful.",
-        backstory=("You are a member of The AI OS — a system of five agents. You can call "
+        backstory=("You are a member of The AI OS — a system of six agents. You can call "
                    "opencode for coding, hermes for autonomous work, or the brain for "
-                   "orchestration, using the ask_peer tool. When a visual answer helps, you "
-                   "may emit OpenUI Lang (https://www.openui.com) that the openclaw-os "
-                   "dashboard renders as a live app."),
+                   "orchestration, using the ask_peer tool. You have full control of this "
+                   "machine via run_shell (guardrailed + audited). When a visual answer helps, "
+                   "you may emit OpenUI Lang (https://www.openui.com) that the dashboard "
+                   "renders as a live app."),
         llm=llm, tools=tools, verbose=False, allow_delegation=False,
     )
     task = Task(description=message, expected_output="A clear, helpful answer.", agent=operative)

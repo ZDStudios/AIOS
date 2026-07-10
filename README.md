@@ -62,8 +62,11 @@ curl -fsSL https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.sh | ba
 irm https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.ps1 | iex
 ```
 
-The installer clones the repo to `~/AIOS`, installs the toolchains (**uv, bun, pnpm, Node**), and runs
-`aios setup` — installing every agent's deps, building, and wiring the Control Room. Then add your key:
+The installer **asks for root once, up front** (sudo on Linux/macOS, a UAC prompt on Windows) — because
+the agents get full control of the machine and setup registers a start-on-boot service and a global
+`aios` command. It then clones the repo to `~/AIOS`, installs the toolchains (**uv, bun, pnpm, Node**)
+into your user profile, and runs `aios setup` — installing every agent's deps, building, wiring the
+Control Room, and applying the full-control exec policy. Then add your key:
 
 ```bash
 cd ~/AIOS
@@ -158,9 +161,15 @@ Plus two integrations that glue it together:
 | `aios doctor` | Diagnose tools, config, deps and ports — with the exact fix for each. |
 | `aios update [--check]` | `git pull` + reinstall changed deps + re-render. `--check` just reports if updates exist (also auto-checked on start). |
 | `aios autostart enable\|disable` | Run The AI OS on login/boot (Startup shortcut on Windows, systemd/`.bashrc` on Linux/WSL). |
+| `aios exec <cmd>` | Run a command through the agents' own **guardrailed, audited** shell. |
+| `aios channels` | List the **28 messaging channels** the gateway can bridge, and which are configured. |
+| `aios attach [args]` | Jump into a running **OpenClaw gateway session** with an external harness, mid-run. |
+| `aios migrate [--source]` | Import settings, memory, skills and keys from an existing **OpenClaw** install. |
+| `aios profile [name]` | Isolated agents per client/project — each with its own memory, tasks, and flows. |
+| `aios token [--rotate]` | Print (or rotate) the hub token that gates non-loopback access. |
 | `aios test --smoke` | Run test suites, or drive the whole stack end-to-end. |
 | `aios logs [svc]` | Tail a service log from `.aios/logs/`. |
-| `aios url` | Print the Control Room + service URLs. |
+| `aios url` | Print the Control Room + service URLs (with the token link for WSL). |
 
 **In the Control Room** (`http://127.0.0.1:8787/`) you can:
 - **Chat** with any agent (Brain, CrewAI, opencode, claude-code) or broadcast to **All**.
@@ -169,8 +178,13 @@ Plus two integrations that glue it together:
 - **Automations** — schedule prompts to run against any agent every N minutes (daily digests, checks).
 - **Log in to Claude from the dashboard** — **Settings → "1 · Log in to Claude"** runs the Claude CLI login *through the hub*: it shows the authorize link, you approve in the browser and paste the code back, all in the UI. Then **"2 · Use my Claude subscription"** routes the Brain/Team/crews through **claude-code** (no API key, no per-token cost). A live status line shows whether claude-code is up and actually authenticated. (Terminal equivalent: `aios claude-login`.)
 - **🛡️ Self-healing agents** — a watchdog in the hub health-checks every agent. If one stops responding it's **automatically restarted**; if the restart fails, a **healthy agent reads its logs and diagnoses the cause**. See the incident log in **Status → Self-healing log** (`watchdog.enabled` in `aios.config.yaml`).
+- **📡 Channels** — a grid of every messaging app OpenClaw can bridge (WhatsApp, Telegram, Discord, Slack, Signal, Matrix, Teams, iMessage, …). Paste a channel's token and it goes live on the one gateway daemon.
+- **⚙ Task Brain** — one SQLite-backed scheduler for cron jobs, interval prompts, and background shell commands. Every run is recorded; tasks survive restarts.
+- **🔀 TaskFlow** — durable multi-step flows that chain agents. State is committed after every step, so a crash or restart **resumes where it left off** instead of replaying work.
+- **🎓 Skills** — install ClawHub-style skills, and watch the **self-improving loop**: after a task that ran commands, a Curator judges whether it taught a reusable procedure and writes a `SKILL.md` every agent then mounts.
+- **🛡️ Control & Audit** — see full-control status, run a guardrailed command, and read the **audit log** of every command any agent ran on this machine.
 - **Settings** — edit provider/key/model, channel tokens, and `aios.config.yaml`; it re-renders into every agent, no terminal needed.
-- **Themes** — Light, Dark, Midnight, Slate, Rose. Chat renders markdown (headers, bullets, code blocks).
+- **Themes** — Hermes (gold), OpenClaw (coral), plus light/dark variants and a theme store. Chat renders markdown and live **OpenUI** widgets.
 
 **Auto-updates:** `aios start` now auto-runs `git pull` + reinstalls changed deps when the repo has updates (`updates.auto_update: true`). Turn it off in `aios.config.yaml`.
 
@@ -208,6 +222,20 @@ curl http://127.0.0.1:8787/v1/models         # list targets
 **Refined theming + theme store:** the default is a warm, classical **Hermes** theme (charcoal + gold, serif headings) — plus **OpenClaw** (coral), **Olympus** (light), **Obsidian**, **Forest**, and **Rose**. **Settings → Theme store** lets you preview and apply any theme, or **install your own** by pasting a JSON of CSS variables.
 
 **Skills & system prompt:** 10 skills ship built-in (skill-maker, mcp-maker, web-search, web-browse, image-gen, code-review, summarize, research, data-analyst, task-scheduler) and mount into every agent. Edit the Brain/Team **system prompt** live in the hub → **Settings**.
+
+## 🖥️ Full machine control (and how it's kept safe)
+
+Every agent controls the computer The AI OS is installed on — shell, filesystem, network — through each project's own supported switch (opencode `OPENCODE_PERMISSION`, claude-code `--dangerously-skip-permissions`, OpenClaw `exec-policy preset yolo`, Hermes unattended-approval, plus a `RUN:` tool-loop the Brain drives). The installer asks for **root once, up front** to set the system pieces up in one pass. Turn it all off with `security.full_control: false`.
+
+That is deliberately the "ambient authority" posture that made **OpenClaw's CVE-2026-25253** a critical RCE — so full control is paired with a real gate, not left open:
+
+- **Loopback is trusted; everyone else needs a token.** The hub mints `AIOS_HUB_TOKEN` at setup. Binding to `0.0.0.0` (needed for WSL) is only safe because every non-loopback request must carry it — `aios url` prints the token link.
+- **CSRF is closed.** A page on the internet can reach `http://127.0.0.1:8787` from your browser, so cross-origin requests are rejected unless they carry the token, and CORS never echoes `*`.
+- **DNS-rebinding is closed.** The `Host` header must be an IP literal or a known-local name.
+- **Guardrails** still refuse the handful of commands that wreck the host rather than do the task — `rm -rf /`, `mkfs`, `dd` to a block device, fork bombs, `shutdown` (`security.guardrails: false` to disable).
+- **Everything is audited.** Every command any agent runs is written to `.aios/aios.db` and shown in **Control & Audit**.
+
+**Active Memory:** a memory sub-agent runs on **every** turn — recall is a free FTS5 query, fact-extraction is one small async call — so the agents actually learn your workflow over time instead of only reading memory at session start (`memory.active`).
 
 **On WSL?** `127.0.0.1:8787` often won't reach WSL from your Windows browser (localhost-forwarding is flaky). `aios start`/`aios url` now print your **WSL IP** URL — use that (e.g. `http://172.31.x.x:8787/`). The hub binds `0.0.0.0` so the WSL IP always works.
 

@@ -165,6 +165,16 @@
   .spin{width:13px;height:13px;border:2px solid var(--border-strong);border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite;display:inline-block}
   @keyframes s{to{transform:rotate(360deg)}}
   @media(max-width:760px){aside{position:absolute;z-index:20;height:100%;box-shadow:var(--shadow);transform:translateX(-100%);transition:transform .2s}aside.open{transform:none}}
+  .pill{font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--sunk2);color:var(--text2);border:1px solid var(--border)}
+  .pill.bad{background:var(--danger-bg);color:var(--danger)}
+  .chan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .chan{border:1px solid var(--border);border-radius:11px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:7px}
+  .chan.on{border-color:var(--success);background:var(--success-bg)}
+  .chan-h{display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .chan p{margin:0;color:var(--text3);font-size:.78rem;line-height:1.35}
+  .chan input{width:100%;font-size:.8rem}
+  .chan-note{color:var(--text3);font-size:.74rem}
+  .logbox{background:var(--sunk);border:1px solid var(--border);border-radius:9px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;white-space:pre-wrap;max-height:340px;overflow:auto;color:var(--text2)}
 </style>
 </head>
 <body>
@@ -196,7 +206,12 @@
 
     <div class="sec">System</div>
     <button class="nav" data-v="memory" onclick="nav('memory')"><span class="ic">🧠</span> Memory</button>
+    <button class="nav" data-v="channels" onclick="nav('channels')"><span class="ic">📡</span> Channels</button>
+    <button class="nav" data-v="tasks" onclick="nav('tasks')"><span class="ic">⚙</span> Task Brain</button>
+    <button class="nav" data-v="flows" onclick="nav('flows')"><span class="ic">🔀</span> TaskFlow</button>
+    <button class="nav" data-v="skills" onclick="nav('skills')"><span class="ic">🎓</span> Skills</button>
     <button class="nav" data-v="automations" onclick="nav('automations')"><span class="ic">⏰</span> Automations</button>
+    <button class="nav" data-v="security" onclick="nav('security')"><span class="ic">🛡️</span> Control &amp; Audit</button>
     <button class="nav" data-v="settings" onclick="nav('settings')"><span class="ic">⚙️</span> Settings</button>
   </aside>
 
@@ -284,6 +299,96 @@
           <div class="grid2" style="margin-top:12px"><input id="promptName" placeholder="name (e.g. standup)"><input id="promptText" placeholder="prompt text…"></div>
           <div class="row"><button class="btn" onclick="addPrompt()">Save prompt</button></div>
           <div id="promptList" style="margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHANNELS -->
+    <div id="channels" class="view">
+      <div class="vhead"><h2>📡 Channels</h2><span class="sub">one daemon, 20+ messaging apps</span></div>
+      <div class="vbody pad">
+        <p style="color:var(--text2);max-width:760px">Every channel OpenClaw can bridge. Fill in a channel's tokens and it goes live on the gateway — WhatsApp, Telegram, Discord, Slack, Signal, Matrix, Teams, iMessage and more, all from the one process.</p>
+        <div id="chanGrid" class="chan-grid" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <!-- TASK BRAIN -->
+    <div id="tasks" class="view">
+      <div class="vhead"><h2>⚙ Task Brain</h2><span class="sub">cron · intervals · agents · shell — one scheduler</span></div>
+      <div class="vbody pad" style="max-width:900px">
+        <div class="card">
+          <h3>New task</h3>
+          <div class="grid2" style="margin-top:10px">
+            <input id="tkName" placeholder="name (e.g. nightly-summary)">
+            <select id="tkKind" onchange="tkKindChange()">
+              <option value="agent">agent prompt</option>
+              <option value="shell">shell command</option>
+              <option value="flow">run a flow (id)</option>
+            </select>
+          </div>
+          <div class="grid2" style="margin-top:8px">
+            <input id="tkTarget" placeholder="target agent (brain, opencode, crewai…)" value="brain">
+            <input id="tkSchedule" placeholder="cron (0 3 * * *)  —  or leave blank">
+          </div>
+          <input id="tkEvery" style="margin-top:8px" placeholder="…or every N minutes (e.g. 60)">
+          <textarea id="tkBody" style="margin-top:8px;min-height:64px" placeholder="prompt / command / flow id"></textarea>
+          <div class="row"><button class="btn primary" onclick="addTask()">Add task</button>
+            <span style="color:var(--text3);font-size:12px;align-self:center">runs survive restarts; every run is recorded</span></div>
+        </div>
+        <div id="taskList" style="margin-top:14px"></div>
+      </div>
+    </div>
+
+    <!-- TASKFLOW -->
+    <div id="flows" class="view">
+      <div class="vhead"><h2>🔀 TaskFlow</h2><span class="sub">durable multi-step flows that survive restarts</span></div>
+      <div class="vbody pad" style="max-width:900px">
+        <div class="card">
+          <h3>New flow</h3>
+          <p style="color:var(--text2)">One step per line as <span class="mono">agent: prompt</span>. Each step's output feeds the next. State is committed after every step — a crash resumes where it left off, not from the top.</p>
+          <input id="flName" style="margin-top:10px" placeholder="flow name">
+          <textarea id="flSteps" style="margin-top:8px;min-height:110px" placeholder="opencode: scan the repo and list the top 3 risks&#10;brain: turn that into a prioritized plan&#10;claudecode: implement fix #1"></textarea>
+          <div class="row"><button class="btn primary" onclick="addFlow()">Create &amp; run</button></div>
+        </div>
+        <div id="flowList" style="margin-top:14px"></div>
+      </div>
+    </div>
+
+    <!-- SKILLS -->
+    <div id="skills" class="view">
+      <div class="vhead"><h2>🎓 Skills</h2><span class="sub">bundled packs · ClawHub · what AIOS taught itself</span></div>
+      <div class="vbody pad" style="max-width:900px">
+        <div class="card">
+          <h3>Self-improving loop <span class="badge up">learning on</span></h3>
+          <p>After a task that actually ran commands, the Curator judges whether it taught a reusable procedure and writes it to <span class="mono">skills/learned/</span>. Every agent then mounts it — the OS gets faster at what you actually do.</p>
+          <div id="learnedList" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <h3>Install a skill</h3>
+          <p style="color:var(--text2)">Paste a SKILL.md (ClawHub-style). It drops into <span class="mono">skills/</span> where every agent picks it up.</p>
+          <input id="skName" style="margin-top:8px" placeholder="skill name">
+          <textarea id="skBody" style="margin-top:8px;min-height:90px" placeholder="---&#10;name: my-skill&#10;description: when to use this&#10;---&#10;# Steps…"></textarea>
+          <div class="row"><button class="btn" onclick="installSkill()">Install</button></div>
+        </div>
+        <div class="card"><h3>Bundled skills</h3><div id="skillList" style="margin-top:10px"></div></div>
+      </div>
+    </div>
+
+    <!-- CONTROL & AUDIT -->
+    <div id="security" class="view">
+      <div class="vhead"><h2>🛡️ Control &amp; Audit</h2><span class="sub">full machine control, gated and logged</span></div>
+      <div class="vbody pad" style="max-width:900px">
+        <div id="secCards" class="grid2"></div>
+        <div class="card">
+          <h3>Run a command <span class="badge down" style="font-weight:600">guardrailed + audited</span></h3>
+          <p style="color:var(--text2)">The same shell the agents use. Guardrails still refuse host-wrecking commands; everything runs through the audit log below.</p>
+          <div class="inrow" style="margin-top:10px"><input id="execCmd" class="mono" placeholder="git status" onkeydown="if(event.key==='Enter')runExec()"><button class="btn primary" onclick="runExec()">Run</button></div>
+          <pre id="execOut" class="logbox" style="margin-top:10px;display:none"></pre>
+        </div>
+        <div class="card">
+          <h3>Audit log</h3>
+          <p style="color:var(--text2)">Every command any agent ran on this machine.</p>
+          <div id="auditList" style="margin-top:10px"></div>
         </div>
       </div>
     </div>
@@ -401,6 +506,16 @@
 </div>
 
 <script>
+  // ── auth: the hub trusts loopback, but over WSL the browser reaches it by IP,
+  // which needs the token. Accept ?token=… once, remember it, and attach it to
+  // every same-origin API call so we never get 401'd from Windows. ──
+  const AIOS_TOKEN=(new URLSearchParams(location.search).get('token'))||localStorage.aiosToken||'';
+  if(AIOS_TOKEN){localStorage.aiosToken=AIOS_TOKEN;
+    if(location.search.includes('token=')&&window.history.replaceState){window.history.replaceState({},'',location.pathname);}}
+  (function(){const _f=window.fetch;window.fetch=function(u,o){o=o||{};
+    const same=(typeof u==='string')&&(u.startsWith('/')||u.startsWith(location.origin));
+    if(AIOS_TOKEN&&same){o.headers=Object.assign({'Authorization':'Bearer '+AIOS_TOKEN},o.headers||{});}
+    return _f(u,o);};})();
   const ROLES={opencode:"coding engine",hermes:"autonomous agent",openclaw:"channel gateway",crewai:"multi-agent crews",claudecode:"Claude Code API","openclaw-os":"dashboard",hub:"brain + interconnect"};
   const ICON={opencode:"⌨️",hermes:"☤",openclaw:"🦞",crewai:"👥",claudecode:"◈","openclaw-os":"🪟",hub:"◆",brain:"◆",team:"✦",all:"🌐"};
   let target="brain", peers={}, svc={}, history=[];
@@ -445,6 +560,11 @@
     if(v==='canvas')loadCanvas();
     if(v==='status')loadHealEvents();
     if(v==='memory'){loadMem();loadPrompts();}
+    if(v==='channels')loadChannels();
+    if(v==='tasks')loadTasks();
+    if(v==='flows')loadFlows();
+    if(v==='skills')loadSkillsView();
+    if(v==='security'){loadSecurity();loadAudit();}
     if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();loadClaudeStatus();}
   }
   function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
@@ -570,9 +690,71 @@
     rec.onresult=e=>{document.getElementById('input').value=e.results[0][0].transcript;};rec.onerror=()=>{};rec.onend=()=>{document.getElementById('micBtn').classList.remove('rec');rec=null;};rec.start();}
   function exportConv(){const c=curConv();if(!c||!c.msgs.length){toast('Nothing to export');return;}const md='# '+(c.title||'Conversation')+'\n\n'+c.msgs.map(m=>`**${m.role==='user'?'You':(m.target||'AI OS')}:**\n\n${m.content}`).join('\n\n---\n\n');const a=document.createElement('a');a.href='data:text/markdown;charset=utf-8,'+encodeURIComponent(md);a.download=(c.title||'conversation').replace(/[^a-z0-9]+/gi,'-').slice(0,40)+'.md';a.click();toast('Exported');}
   // memory + prompts
-  async function loadMem(){try{const r=await(await fetch('/api/memory')).json();const m=r.memory||[];document.getElementById('memList').innerHTML=m.length?m.map((x,i)=>`<div class="memrow"><span class="t">${esc(x)}</span><button class="btn sm danger" onclick="delMem(${i})">✕</button></div>`).join(''):'<p style="color:var(--text3)">No memories yet — add facts the agents should always know.</p>';}catch(e){}}
+  async function loadMem(){try{const r=await(await fetch('/api/memory')).json();const m=r.memory||[];const fts=r.fts5?' <span class="badge up" style="font-weight:600">FTS5 search on</span>':'';const h=document.querySelector('#memory .card h3');if(h&&!h.dataset.fts){h.innerHTML+=fts;h.dataset.fts='1';}document.getElementById('memList').innerHTML=m.length?m.map(x=>`<div class="memrow"><span class="t">${esc(x.text)}</span><button class="btn sm danger" onclick="delMem(${x.id})">✕</button></div>`).join(''):'<p style="color:var(--text3)">No memories yet — the Active Memory sub-agent will fill this in as you chat, or add facts here.</p>';}catch(e){}}
   async function addMem(){const v=document.getElementById('memInput').value.trim();if(!v)return;await api('/api/memory',{op:'add',text:v});document.getElementById('memInput').value='';toast('Remembered — every agent now knows this');loadMem();}
-  async function delMem(i){await api('/api/memory',{op:'delete',index:i});loadMem();}
+  async function delMem(id){await api('/api/memory',{op:'delete',id});loadMem();}
+
+  // ── Channels ──
+  async function loadChannels(){try{const r=await(await fetch('/api/channels')).json();const cs=r.channels||[];const g=document.getElementById('chanGrid');
+    g.innerHTML=cs.map(c=>`<div class="chan ${c.configured?'on':''}">
+      <div class="chan-h"><b>${esc(c.label)}</b>${c.configured?'<span class="badge up">live</span>':(c.envVars&&c.envVars.length?'<span class="badge down">setup</span>':'<span class="badge down">plugin</span>')}</div>
+      <p>${esc(c.blurb||'')}</p>
+      ${c.envVars&&c.envVars.length?c.envVars.map(v=>`<input data-env="${esc(v)}" data-chan="${esc(c.id)}" placeholder="${esc(v)}" ${c.configured?'value="********" disabled':''}>`).join(''):'<div class="chan-note">install: <span class="mono">aios attach</span> / plugin</div>'}
+      ${c.envVars&&c.envVars.length&&!c.configured?`<button class="btn sm primary" onclick="saveChannel('${esc(c.id)}')">Connect</button>`:''}
+    </div>`).join('');
+  }catch(e){document.getElementById('chanGrid').innerHTML='<p style="color:var(--text3)">Channels unavailable.</p>';}}
+  async function saveChannel(id){const env={};document.querySelectorAll(`[data-chan="${id}"]`).forEach(i=>{if(i.value&&i.value!=='********')env[i.dataset.env]=i.value;});if(!Object.keys(env).length){toast('Fill in the token first');return;}await api('/api/channels',{env,restart:true});toast(id+' connecting — restarting gateway');setTimeout(loadChannels,1500);}
+
+  // ── Task Brain ──
+  function tkKindChange(){const k=document.getElementById('tkKind').value;document.getElementById('tkTarget').style.display=k==='agent'?'':'none';}
+  async function loadTasks(){try{const r=await(await fetch('/api/tasks')).json();const ts=r.tasks||[];document.getElementById('taskList').innerHTML=ts.length?ts.map(t=>`
+    <div class="card" style="padding:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <b>${esc(t.name)}</b> <span class="pill">${esc(t.kind)}</span>
+        ${t.cron?`<span class="pill mono">${esc(t.cron)}</span>`:(t.every_minutes?`<span class="pill">every ${t.every_minutes}m</span>`:'')}
+        <span class="badge ${t.enabled?'up':'down'}">${t.enabled?'on':'off'}</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn sm" onclick="taskOp('run',${t.id})">Run now</button>
+          <button class="btn sm" onclick="taskOp('toggle',${t.id})">${t.enabled?'Pause':'Resume'}</button>
+          <button class="btn sm danger" onclick="taskOp('delete',${t.id})">✕</button>
+        </div>
+      </div>
+      <div style="color:var(--text3);font-size:12px;margin-top:6px">${esc((t.prompt||t.command||'').slice(0,120))}</div>
+      ${t.last_status?`<div style="margin-top:6px;font-size:12px"><span class="badge ${t.last_status==='ok'?'up':'down'}">${t.last_status}</span> <span style="color:var(--text3)">${esc((t.last_output||'').slice(0,140))}</span></div>`:''}
+    </div>`).join(''):'<p style="color:var(--text3)">No tasks yet. The Task Brain runs cron jobs, interval prompts, and shell commands on one scheduler.</p>';}catch(e){}}
+  async function addTask(){const name=document.getElementById('tkName').value.trim()||'task';const kind=document.getElementById('tkKind').value;const body=document.getElementById('tkBody').value.trim();const cron=document.getElementById('tkSchedule').value.trim();const every=parseInt(document.getElementById('tkEvery').value)||0;const p={op:'add',name,kind,cron,every_minutes:every};if(kind==='agent'){p.target=document.getElementById('tkTarget').value.trim()||'brain';p.prompt=body;}else{p.command=body;}await api('/api/tasks',p);document.getElementById('tkName').value='';document.getElementById('tkBody').value='';toast('Task added');loadTasks();}
+  async function taskOp(op,id){const r=await api('/api/tasks',{op,id});if(op==='run')toast('Ran: '+(r.status||''));loadTasks();}
+
+  // ── TaskFlow ──
+  async function loadFlows(){try{const r=await(await fetch('/api/flows')).json();const fs=r.flows||[];document.getElementById('flowList').innerHTML=fs.length?fs.map(f=>`
+    <div class="card" style="padding:14px">
+      <div style="display:flex;align-items:center;gap:8px"><b>${esc(f.name)}</b>
+        <span class="badge ${f.status==='done'?'up':(f.status==='error'?'down':'')}" ${f.status!=='done'&&f.status!=='error'?'style="background:var(--accent-soft);color:var(--accent-strong)"':''}>${esc(f.status)}</span>
+        <span class="pill">step ${f.cursor}</span><span class="pill">rev ${f.revision}</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn sm" onclick="flowOp('run',${f.id})">${f.status==='error'?'Resume':'Re-run'}</button>
+          <button class="btn sm danger" onclick="flowOp('delete',${f.id})">✕</button>
+        </div>
+      </div>
+      ${f.error?`<div style="margin-top:6px;font-size:12px;color:var(--danger)">${esc(f.error)}</div>`:''}
+    </div>`).join(''):'<p style="color:var(--text3)">No flows yet. A flow chains agents; state is saved after every step so a restart resumes it.</p>';}catch(e){}}
+  async function addFlow(){const name=document.getElementById('flName').value.trim()||'flow';const steps=document.getElementById('flSteps').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const i=l.indexOf(':');return i<0?{agent:'brain',prompt:l}:{agent:l.slice(0,i).trim(),prompt:l.slice(i+1).trim()};});if(!steps.length){toast('Add at least one step');return;}await api('/api/flows',{op:'create',name,steps,start:true});document.getElementById('flName').value='';document.getElementById('flSteps').value='';toast('Flow started');loadFlows();}
+  async function flowOp(op,id){await api('/api/flows',{op,id});loadFlows();}
+
+  // ── Skills ──
+  async function loadSkillsView(){try{const r=await(await fetch('/api/skills')).json();const learned=r.learned||[];document.getElementById('learnedList').innerHTML=learned.length?learned.map(s=>`<div class="memrow"><span class="t">🎓 <b>${esc(s.name)}</b> <span style="color:var(--text3)">${esc((s.task||'').slice(0,80))}</span></span></div>`).join(''):'<p style="color:var(--text3)">Nothing learned yet — run a task that uses the shell and the Curator may save a skill.</p>';const sk=r.skills||[];document.getElementById('skillList').innerHTML=sk.map(s=>`<div class="memrow"><span class="t"><b>${esc(s.name)}</b> — ${esc(s.description||'')}</span>${s.learned?'<span class="pill">learned</span>':''}</div>`).join('');}catch(e){}}
+  async function installSkill(){const name=document.getElementById('skName').value.trim();const content=document.getElementById('skBody').value.trim();if(!name||!content){toast('Name and content required');return;}const r=await api('/api/skills',{op:'install',name,content});toast(r.ok?'Skill installed → '+r.slug:'Failed');document.getElementById('skName').value='';document.getElementById('skBody').value='';loadSkillsView();}
+
+  // ── Control & Audit ──
+  async function loadSecurity(){try{const s=await(await fetch('/api/security')).json();const b=s.brain||{};
+    document.getElementById('secCards').innerHTML=`
+      <div class="card"><h3>Full control ${s.full_control?'<span class="badge up">ON</span>':'<span class="badge down">off</span>'}</h3><p>Agents ${s.full_control?'can run shell commands on this machine.':'are read-only.'} Guardrails ${s.guardrails?'<b>on</b> — host-wrecking commands refused.':'<b>off</b>.'}</p></div>
+      <div class="card"><h3>Access</h3><p>Hub token ${s.token_set?'<span class="badge up">set</span>':'<span class="badge down">missing</span>'} · bound to <span class="mono">${esc(s.bind)}</span>. Loopback is trusted; other hosts need the token.</p></div>
+      <div class="card"><h3>Active Memory ${s.active_memory?'<span class="badge up">on</span>':'<span class="badge down">off</span>'}</h3><p>A memory sub-agent recalls relevant context every turn. ${b.memory||0} facts · ${b.fts5?'FTS5':'LIKE'} search.</p></div>
+      <div class="card"><h3>Brain store</h3><p>${b.tasks||0} tasks · ${b.flows||0} flows · ${b.skills_learned||0} learned skills · ${b.audit||0} audited actions.</p></div>`;
+  }catch(e){document.getElementById('secCards').innerHTML='<p style="color:var(--text3)">Security status unavailable.</p>';}}
+  async function runExec(){const cmd=document.getElementById('execCmd').value.trim();if(!cmd)return;const out=document.getElementById('execOut');out.style.display='';out.textContent='running…';const r=await api('/api/exec',{command:cmd});out.textContent=(r.blocked?'⛔ '+r.err:(r.out||'')+(r.err?'\n[stderr]\n'+r.err:''))||('(exit '+r.code+')');loadAudit();}
+  async function loadAudit(){try{const r=await(await fetch('/api/audit')).json();const a=r.audit||[];document.getElementById('auditList').innerHTML=a.length?a.slice(0,60).map(x=>`<div class="memrow"><span class="t"><span class="pill ${x.ok?'':'bad'}">${esc(x.action)}</span> <span class="mono" style="color:var(--text2)">${esc((x.detail||'').slice(0,90))}</span></span><span style="color:var(--text3);font-size:11px">${esc(x.actor)}</span></div>`).join(''):'<p style="color:var(--text3)">No actions logged yet.</p>';}catch(e){}}
   async function loadPrompts(){try{const r=await(await fetch('/api/prompts')).json();PROMPTS=r.prompts||[];const el=document.getElementById('promptList');if(el)el.innerHTML=PROMPTS.length?PROMPTS.map(p=>`<div class="memrow"><span class="t"><b class="mono">/${esc(p.name)}</b> — ${esc((p.text||'').slice(0,70))}</span><button class="btn sm danger" onclick="delPrompt('${p.name}')">✕</button></div>`).join(''):'<p style="color:var(--text3)">No saved prompts.</p>';}catch(e){}}
   async function addPrompt(){const n=document.getElementById('promptName').value.trim(),t=document.getElementById('promptText').value.trim();if(!n||!t)return;await api('/api/prompts',{op:'add',name:n,text:t});document.getElementById('promptName').value='';document.getElementById('promptText').value='';toast('Prompt saved — type /'+n+' in chat');loadPrompts();}
   async function delPrompt(n){await api('/api/prompts',{op:'delete',name:n});loadPrompts();}

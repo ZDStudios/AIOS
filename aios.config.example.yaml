@@ -41,6 +41,23 @@ services:
   openclaw_os:             # openclaw's own dashboard (a plugin, not an agent)
     enabled: true
 
+# Every agent controls the computer AIOS is installed on: shell, filesystem, network.
+# That is the point of an agent OS — and it is why the hub authenticates. Full control
+# plus an open control plane is exactly the bug that made OpenClaw's CVE-2026-25253
+# critical, so non-loopback and cross-origin requests must carry AIOS_HUB_TOKEN (.env).
+security:
+  full_control: true       # agents may run shell commands. false = read-only agents.
+  guardrails: true         # still refuse `rm -rf /`, mkfs, fork bombs, shutdown, dd to /dev/sd*
+  exec_timeout: 120        # seconds before a runaway command is killed
+  allowed_hosts: ""        # extra Host: values to accept, comma-separated (DNS-rebinding guard)
+
+memory:
+  active: true             # Active Memory: a memory sub-agent runs on EVERY turn.
+                           # Recall is a free FTS5 query; fact-extraction is one small
+                           # async LLM call, so it never slows the turn you're waiting on.
+
+profile: default           # isolated agents per client/project: AIOS_PROFILE=work aios start
+
 lifeos:
   mount_skills: true       # copy LifeOS skills into openclaw + hermes skill dirs
 
@@ -49,6 +66,9 @@ openui:
 
 skills:
   mount: true              # mount the bundled skills/ (skill-maker, mcp-maker, …) into agents
+  learn: true              # self-improving loop: after a task that ran commands, the Curator
+                           # judges whether it taught a reusable procedure and writes
+                           # skills/learned/<name>/SKILL.md, which every agent then mounts
 
 updates:
   check_on_start: true     # on `aios start`, check the repo for updates and notify

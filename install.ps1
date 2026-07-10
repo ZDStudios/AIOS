@@ -1,5 +1,5 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# The AI OS — one-line installer for Windows (PowerShell)
+# -----------------------------------------------------------------------------
+# The AI OS -- one-line installer for Windows (PowerShell)
 #
 #   irm https://raw.githubusercontent.com/ZDStudios/AIOS/main/install.ps1 | iex
 #
@@ -7,7 +7,7 @@
 # `aios setup` to install every project's deps, build, and wire it together.
 #
 # Env overrides:  $env:AIOS_DIR   $env:AIOS_BRANCH   $env:AIOS_NO_SETUP=1
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 $ErrorActionPreference = 'Stop'
 
 $Repo   = 'https://github.com/ZDStudios/AIOS.git'
@@ -20,8 +20,33 @@ function WARN($m){ Write-Host "!   $m" -ForegroundColor Yellow }
 function Have($n){ [bool](Get-Command $n -ErrorAction SilentlyContinue) }
 
 Write-Host ""
-C "  The AI OS  —  Five AI agents. One operating system."
+C "  The AI OS  --  Six AI agents. One operating system."
 Write-Host ""
+
+# 0. elevation -- The AI OS gives its agents full control of this machine and wants to
+#    register a start-on-boot task. Ask once, up front, rather than dying halfway
+#    through a ten-minute build. Toolchains still install into the *user* profile.
+$CurrentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+$Principal   = New-Object Security.Principal.WindowsPrincipal($CurrentUser)
+$IsAdmin     = $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $IsAdmin -and $env:AIOS_NO_ELEVATE -ne '1') {
+    WARN "The AI OS agents get full control of this machine, and setup registers a boot task."
+    C   "Re-launching as Administrator (decline to continue user-local only)..."
+    $selfPath = $MyInvocation.MyCommand.Definition
+    if ($selfPath -and (Test-Path $selfPath)) {
+        try {
+            $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $selfPath + '"'))
+            Start-Process powershell -Verb RunAs -Wait -ArgumentList $argList
+            exit 0
+        } catch { WARN "elevation declined - continuing without admin" }
+    } else {
+        # Piped from `irm | iex`: there is no file to re-launch. Carry on unelevated;
+        # everything except the boot task works fine from a user shell.
+        WARN "running from a pipe - cannot self-elevate. Autostart may need an admin shell."
+    }
+}
+if ($IsAdmin) { OK "running elevated" }
 
 # 1. prerequisites
 foreach ($t in 'git') { if (-not (Have $t)) { throw "$t is required. Install Git and re-run." } }
@@ -43,7 +68,7 @@ Set-Location $Dir
 C "Installing toolchains..."
 if (-not (Have 'uv'))   { C "* uv";   irm https://astral.sh/uv/install.ps1 | iex }
 if (-not (Have 'bun'))  { C "* bun";  irm bun.sh/install.ps1 | iex }
-if (-not (Have 'node')) { WARN "Node >=20 not found — install it from https://nodejs.org (openclaw needs it)" }
+if (-not (Have 'node')) { WARN "Node >=20 not found -- install it from https://nodejs.org (openclaw needs it)" }
 if (-not (Have 'pnpm')) { C "* pnpm"; if (Have 'npm') { npm i -g pnpm } else { irm https://get.pnpm.io/install.ps1 | iex } }
 
 # 4. run aios setup

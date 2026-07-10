@@ -260,6 +260,17 @@
       <div class="card feat reveal"><div class="ico" style="background:rgba(245,158,11,.14);color:var(--amber)">🧪</div><h3>Unified testing & debugging</h3><div class="role"><span class="mono">aios test --smoke</span> drives the whole stack end-to-end. <span class="mono">aios debug</span> dumps resolved config with secrets masked.</div></div>
       <div class="card feat reveal"><div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">🪟</div><h3>Windows-first, cross-platform</h3><div class="role">Built and verified on Windows 11 (PowerShell), with POSIX / macOS / Linux / WSL parity. Zero-dependency Python core.</div></div>
     </div>
+
+    <div class="eyebrow reveal" style="margin-top:56px">The OpenClaw + Hermes playbook, unified</div>
+    <h2 class="reveal">Everything, baked in</h2>
+    <div class="grid g3">
+      <div class="card feat reveal"><div class="ico" style="background:rgba(6,182,212,.14);color:var(--cyan)">🖥️</div><h3>Full machine control</h3><div class="role">Every agent gets shell, files and network on the host — each via its project's own switch. Paired with a token gate, CSRF/rebinding guards, guardrails and a full audit log, so it isn't the CVE-2026-25253 footgun.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(34,197,94,.14);color:var(--green)">📡</div><h3>Multi-channel gateway</h3><div class="role">One daemon bridges <b>28 messaging apps</b> — WhatsApp, Telegram, Discord, Slack, Signal, Matrix, Teams, iMessage and more. Paste a token in the Channels grid; it goes live.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(245,158,11,.14);color:var(--amber)">⚙</div><h3>Task Brain</h3><div class="role">One SQLite-backed scheduler unifies cron jobs, interval prompts and background shell commands. Every run recorded; tasks survive restarts — like k8s for agent tasks.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(236,72,153,.14);color:var(--pink)">🔀</div><h3>TaskFlow</h3><div class="role">Durable multi-step flows that chain agents. State commits after every step, so a crash or restart <b>resumes where it left off</b> — with full revision history.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(139,92,246,.14);color:var(--violet)">🧠</div><h3>Active Memory</h3><div class="role">A memory sub-agent fires on <b>every</b> turn — free FTS5 recall + async fact-extraction — so the agents learn your workflow, not just read memory at session start.</div></div>
+      <div class="card feat reveal"><div class="ico" style="background:rgba(6,182,212,.14);color:var(--cyan)">🎓</div><h3>Self-improving skills</h3><div class="role">After a task that ran commands, a Curator judges whether it taught a reusable procedure and writes a <span class="mono">SKILL.md</span> every agent then mounts. Plus ClawHub-style installs and <span class="mono">aios migrate</span> from OpenClaw.</div></div>
+    </div>
   </div>
 </section>
 
