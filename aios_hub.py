@@ -109,6 +109,7 @@ TARGETS = ["brain", "team", "opencode", "crewai", "claudecode", "all"]
 MEMORY_FILE = ROOT / ".aios" / "memory.json"
 USAGE_FILE = ROOT / ".aios" / "usage.json"
 PROMPTS_FILE = ROOT / ".aios" / "prompts.json"
+WIDGETS_FILE = ROOT / ".aios" / "widgets.json"  # generative-UI canvas any agent can edit
 
 
 def _load_json(p, default):
@@ -263,8 +264,12 @@ def route(target: str, message: str, history: list | None = None) -> str:
                "You are the AIOS Brain — the orchestrator of The AI OS, which unifies six agents: "
                "opencode (coding), hermes (autonomous), openclaw (channels), CrewAI (multi-agent crews), "
                "claude-code (Claude Code API), and LifeOS (shared skills). Be concise and helpful. Suggest "
-               "which agent is best for a task. When a visual answer helps (charts, tables, forms, dashboards), "
-               "you may emit OpenUI Lang (https://www.openui.com) which the openclaw-os dashboard renders live.")
+               "which agent is best for a task.")
+        sys += ("\n\nGENERATIVE UI (OpenUI): when a visual answer helps (charts, tables, forms, dashboards, "
+                "buttons), emit a fenced ```ui block containing a full, self-contained HTML document "
+                "(inline CSS/JS, no external URLs). The hub renders it live and interactive inside the chat. "
+                "Use the page's theme via CSS variables like var(--accent), var(--bg), var(--text). This is "
+                "OpenUI-style generative UI (https://www.openui.com).")
         mem = read_memory()
         if mem:  # shared cross-agent memory — every brain reply knows these facts
             sys += "\n\nKnown facts / preferences about the user (remember these):\n" + \
@@ -553,6 +558,8 @@ class Handler(BaseHTTPRequestHandler):
             u = _load_json(USAGE_FILE, {})
             free = u.get("claudecode", 0)
             self._send(200, {"usage": u, "total": sum(u.values()), "free_requests": free})
+        elif self.path == "/api/ui":
+            self._send(200, {"widgets": _load_json(WIDGETS_FILE, [])})
         elif self.path in ("/v1/models", "/api/v1/models"):
             # AIOS as an OpenAI-compatible API: its "models" are the chat targets.
             now = int(time.time())
@@ -659,6 +666,22 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, run_pipeline(payload.get("message", ""),
                                          payload.get("steps", ["crewai", "opencode", "brain"]),
                                          payload.get("history", [])))
+        elif self.path == "/api/ui":
+            # Shared generative-UI canvas: any agent can add/remove widgets (HTML).
+            items = _load_json(WIDGETS_FILE, [])
+            op = payload.get("op", "add")
+            if op == "add":
+                items.insert(0, {"id": str(int(time.time() * 1000)),
+                                 "title": (payload.get("title") or "widget")[:80],
+                                 "by": (payload.get("by") or "agent")[:24],
+                                 "html": payload.get("html", ""), "ts": time.time()})
+                items = items[:40]
+            elif op == "delete":
+                items = [w for w in items if w.get("id") != payload.get("id")]
+            elif op == "clear":
+                items = []
+            _save_json(WIDGETS_FILE, items)
+            self._send(200, {"ok": True, "widgets": items})
         elif self.path == "/api/memory":
             mem = read_memory()
             op = payload.get("op", "add")

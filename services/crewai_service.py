@@ -56,7 +56,23 @@ def _peer_tool():
             except Exception as e:
                 return f"(peer '{target}' unreachable: {e})"
 
-        return [ask_peer]
+        @tool("build_dashboard_ui")
+        def build_dashboard_ui(spec: str) -> str:
+            """Add a live widget to the AI OS dashboard Canvas. Format 'Title | <html>'
+            where <html> is a self-contained HTML snippet (inline CSS/JS, theme vars like
+            var(--accent) allowed). Use this to show charts, tables, forms, or dashboards."""
+            title, _, html = spec.partition("|")
+            body = json.dumps({"op": "add", "title": title.strip() or "widget",
+                               "by": "CrewAI", "html": html.strip() or spec}).encode()
+            req = urllib.request.Request(HUB + "/api/ui", data=body, method="POST",
+                                         headers={"Content-Type": "application/json"})
+            try:
+                urllib.request.urlopen(req, timeout=30)
+                return "Widget added to the dashboard Canvas."
+            except Exception as e:
+                return f"(could not add widget: {e})"
+
+        return [ask_peer, build_dashboard_ui]
     except Exception:
         return []
 

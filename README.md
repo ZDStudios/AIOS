@@ -86,7 +86,8 @@ aios url                 # open the Control Room
 - **Use every agent's UI** — the hermes and openclaw-os dashboards are embedded as tabs.
 - **Let agents reach each other** — the Hub is the interconnect bus; each agent is given every other
   agent's endpoint, and CrewAI ships an `ask_peer` tool to call them.
-- **Render generative UI** — replies can come back as **OpenUI** apps (charts, tables, forms) via openclaw-os.
+- **Render generative UI (OpenUI) in the hub** — any agent can emit a ```ui``` block (self-contained HTML) that the hub renders **live and interactive** in chat (sandboxed, theme-aware). openclaw-os also renders OpenUI Lang natively.
+- **Shared Canvas any agent can edit** — agents `POST /api/ui` (CrewAI has a `build_dashboard_ui` tool) to pin widgets to a **Canvas** everyone sees. This is how "all agents edit the dashboard."
 
 ## 🧩 The five agents
 
