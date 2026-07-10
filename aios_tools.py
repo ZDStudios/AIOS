@@ -19,6 +19,7 @@ import io
 import json
 import os
 import platform
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -205,8 +206,107 @@ def learn_skill(name: str, content: str, task: str = "") -> dict:
     return {"ok": True, "path": str(d.relative_to(ROOT))}
 
 
+# --------------------------------------------------------------------------- #
+# Fabric — danielmiessler/fabric. Its 255 "patterns" are just system prompts    #
+# (data/patterns/<name>/system.md), so we run them through AIOS's own LLM path:  #
+# no Go binary required, and they use whatever model you configured (including   #
+# your Claude subscription via claude-code). The real `fabric` CLI is optional   #
+# and only needed for its extras (--serve, youtube, scrape).                     #
+# --------------------------------------------------------------------------- #
+_FAB_CACHE: list | None = None
+
+
+def _fabric_dirs() -> list[Path]:
+    return [ROOT / "fabric-main" / "data" / "patterns",
+            Path.home() / ".config" / "fabric" / "patterns"]
+
+
+def _pattern_desc(system_md: str) -> str:
+    """A one-liner for the pattern: the 'You are …' identity line if present."""
+    for line in system_md.splitlines():
+        s = line.strip()
+        if s.lower().startswith(("you are", "you take", "you extract", "you're")):
+            return s[:200]
+    for line in system_md.splitlines():
+        s = line.strip()
+        if s and not s.startswith("#") and s.upper() not in ("IDENTITY", "INPUT:", "INPUT"):
+            return s[:200]
+    return ""
+
+
+def fabric_patterns() -> list[dict]:
+    global _FAB_CACHE
+    if _FAB_CACHE is None:
+        out, seen = [], set()
+        for base in _fabric_dirs():
+            if not base.exists():
+                continue
+            for d in sorted(base.iterdir()):
+                sysf = d / "system.md"
+                if d.is_dir() and sysf.exists() and d.name not in seen:
+                    seen.add(d.name)
+                    try:
+                        desc = _pattern_desc(sysf.read_text(encoding="utf-8", errors="replace"))
+                    except Exception:
+                        desc = ""
+                    out.append({"name": d.name, "description": desc})
+        _FAB_CACHE = out
+    return _FAB_CACHE
+
+
+def fabric_pattern_system(name: str) -> str | None:
+    slug = "".join(ch for ch in (name or "").strip().lower() if ch.isalnum() or ch in "-_")
+    for base in _fabric_dirs():
+        f = base / slug / "system.md"
+        if f.exists():
+            return f.read_text(encoding="utf-8", errors="replace")
+    return None
+
+
+def fabric_bin() -> str:
+    return shutil.which("fabric") or ""
+
+
+# --------------------------------------------------------------------------- #
+# Caveman — JuliusBrussee/caveman. A system-prompt OVERLAY that makes the agent  #
+# ~65% terser while keeping technical accuracy. We read its own SKILL.md so the  #
+# behaviour stays faithful, and expose the intensity levels it defines.          #
+# --------------------------------------------------------------------------- #
+CAVEMAN_LEVELS = ["lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra"]
+
+_CAVE_FALLBACK = (
+    "Respond terse like smart caveman. All technical substance stays; only fluff dies. "
+    "Drop articles (a/an/the), filler (just/really/basically), pleasantries, hedging. "
+    "Fragments OK. Short synonyms. No tool-call narration, no decorative tables/emoji. "
+    "Keep technical terms, code, API names, CLI commands and exact error strings verbatim. "
+    "Never invent abbreviations. Never announce the style.")
+
+
+def caveman_skill() -> str:
+    f = ROOT / "caveman-main" / "skills" / "caveman" / "SKILL.md"
+    if f.exists():
+        txt = f.read_text(encoding="utf-8", errors="replace")
+        # Strip the YAML front-matter; keep the behavioural body.
+        if txt.startswith("---"):
+            end = txt.find("---", 3)
+            if end > 0:
+                txt = txt[end + 3:].strip()
+        return txt
+    return _CAVE_FALLBACK
+
+
+def caveman_overlay(level: str = "full") -> str:
+    level = level if level in CAVEMAN_LEVELS else "full"
+    return (f"\n\n## CAVEMAN MODE — intensity: {level}\n"
+            "Apply this output style to every reply from now on (compress the STYLE, not the "
+            "content; keep code, commands, API names and error strings exact):\n\n"
+            + caveman_skill())
+
+
 if __name__ == "__main__":
     print(json.dumps({"full_control": full_control(), "guardrails": guardrails_on(),
-                      "channels": len(channels()), "skills": len(skills())}, indent=2))
+                      "channels": len(channels()), "skills": len(skills()),
+                      "fabric_patterns": len(fabric_patterns()), "fabric_bin": fabric_bin() or None,
+                      "caveman": bool(caveman_skill())}, indent=2))
     for c in channels():
         print(f"  {'[x]' if c['configured'] else '[ ]'} {c['id']:<20} {c['blurb'][:60]}")

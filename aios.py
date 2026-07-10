@@ -263,6 +263,10 @@ PROJECTS = {
     # openclaw-os is the dashboard for openclaw (not a standalone agent).
     "openclaw_os": resolve_root("openclaw-os-main/openclaw-os-main", "openclaw-os-main", "openclaw-os"),
     "lifeos": resolve_root("LifeOS-main/LifeOS-main", "LifeOS-main", "LifeOS"),
+    # Prompt-level integrations (no service): fabric = 255 pattern prompts,
+    # caveman = a conciseness system-prompt overlay.
+    "fabric": resolve_root("fabric-main/fabric-main", "fabric-main", "fabric"),
+    "caveman": resolve_root("caveman-main/caveman-main", "caveman-main", "caveman"),
 }
 
 
@@ -799,6 +803,7 @@ def cmd_setup(args):
     # 6c) mount the bundled AI OS skills (skill-maker, mcp-maker, …) into the agents
     if cfg_get(cfg, "skills.mount", True):
         mount_aios_skills(cfg)
+        mount_caveman(cfg)  # caveman conciseness skill → every agent
 
     # 7) wire openclaw-os plugin (best-effort; needs openclaw runnable)
     if cfg_get(cfg, "services.openclaw_os.enabled", True) and not args.skip_wire:
@@ -1161,6 +1166,30 @@ def mount_aios_skills(cfg: dict):
             except Exception as e:
                 warn(f"could not mount {name} → {t}: {e}")
     ok(f"mounted {len(names)} skills: {', '.join(names)}")
+
+
+def mount_caveman(cfg: dict):
+    """Mount JuliusBrussee/caveman's skills into every agent, so terser 'caveman
+    mode' is available not just to the hub Brain but to opencode/hermes/openclaw too."""
+    src = PROJECTS.get("caveman") or (ROOT / "caveman-main")
+    skdir = src / "skills"
+    if not skdir.exists():
+        return
+    head("Mounting Caveman skills")
+    names = [p.name for p in skdir.iterdir() if p.is_dir() and (p / "SKILL.md").exists()]
+    targets = [Path.home() / ".openclaw" / "skills", Path.home() / ".hermes" / "skills",
+               STATE / "skills"]
+    for t in targets:
+        for name in names:
+            try:
+                dst = t / name
+                if dst.exists():
+                    shutil.rmtree(dst)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(skdir / name, dst)
+            except Exception as e:
+                warn(f"could not mount caveman/{name} → {t}: {e}")
+    ok(f"mounted {len(names)} caveman skills: {', '.join(names)}")
 
 
 def mount_openui(cfg: dict):

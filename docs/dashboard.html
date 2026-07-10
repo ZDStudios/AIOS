@@ -175,6 +175,14 @@
   .chan input{width:100%;font-size:.8rem}
   .chan-note{color:var(--text3);font-size:.74rem}
   .logbox{background:var(--sunk);border:1px solid var(--border);border-radius:9px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;white-space:pre-wrap;max-height:340px;overflow:auto;color:var(--text2)}
+  .patlist{max-height:62vh;overflow:auto;border:1px solid var(--border);border-radius:10px}
+  .patrow{padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;flex-direction:column;gap:2px}
+  .patrow:last-child{border-bottom:0}
+  .patrow:hover{background:var(--elevated)}
+  .patrow.sel{background:var(--accent-soft);border-left:3px solid var(--accent)}
+  .patrow b{font-size:.84rem;color:var(--text)}
+  .patrow small{color:var(--text3);font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #caveBtn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -210,6 +218,7 @@
     <button class="nav" data-v="tasks" onclick="nav('tasks')"><span class="ic">⚙</span> Task Brain</button>
     <button class="nav" data-v="flows" onclick="nav('flows')"><span class="ic">🔀</span> TaskFlow</button>
     <button class="nav" data-v="skills" onclick="nav('skills')"><span class="ic">🎓</span> Skills</button>
+    <button class="nav" data-v="patterns" onclick="nav('patterns')"><span class="ic">🧵</span> Patterns</button>
     <button class="nav" data-v="automations" onclick="nav('automations')"><span class="ic">⏰</span> Automations</button>
     <button class="nav" data-v="security" onclick="nav('security')"><span class="ic">🛡️</span> Control &amp; Audit</button>
     <button class="nav" data-v="settings" onclick="nav('settings')"><span class="ic">⚙️</span> Settings</button>
@@ -236,6 +245,7 @@
             <button class="chip" data-t="crewai">👥 CrewAI</button>
             <button class="chip" data-t="opencode">⌨️ opencode</button>
             <button class="chip" data-t="claudecode">◈ claude-code</button>
+            <button class="chip" data-t="fabric" title="Run a Fabric pattern (type: pattern: your text)">🧵 Fabric</button>
             <button class="chip" data-t="all">🌐 All</button>
           </div>
           <div class="inrow">
@@ -245,6 +255,7 @@
           </div>
           <div class="hint" style="margin-top:7px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
             <label style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="speakToggle" style="width:auto"> 🔊 speak replies</label>
+            <button id="caveBtn" class="btn sm" onclick="cycleCaveman()" title="Caveman mode — terser replies (JuliusBrussee/caveman)">🗿 Caveman: off</button>
             <span id="usageBadge" style="color:var(--text3)"></span>
             <a onclick="exportConv()" style="cursor:pointer;color:var(--accent-strong)">⬇️ export chat</a>
             <a onclick="openPalette()" style="cursor:pointer;color:var(--text3)">⌘K palette</a>
@@ -371,6 +382,28 @@
           <div class="row"><button class="btn" onclick="installSkill()">Install</button></div>
         </div>
         <div class="card"><h3>Bundled skills</h3><div id="skillList" style="margin-top:10px"></div></div>
+      </div>
+    </div>
+
+    <!-- PATTERNS (Fabric) -->
+    <div id="patterns" class="view">
+      <div class="vhead"><h2>🧵 Patterns</h2><span class="sub">Fabric — 250+ task prompts, run on your model</span></div>
+      <div class="vbody pad">
+        <p style="color:var(--text2);max-width:760px">Every <b>Fabric</b> pattern (danielmiessler/fabric) — <span class="mono">summarize</span>, <span class="mono">extract_wisdom</span>, <span class="mono">analyze_claims</span>, <span class="mono">write_essay</span>… — runs through your configured model (including your Claude subscription). Pick one, paste text, run. In chat: <span class="mono">/p summarize &lt;text&gt;</span>.</p>
+        <div class="grid2" style="margin-top:14px;align-items:start">
+          <div>
+            <input id="patFilter" placeholder="Filter 250+ patterns…" oninput="renderPatterns()">
+            <div id="patList" class="patlist" style="margin-top:10px"></div>
+          </div>
+          <div class="card" style="position:sticky;top:10px">
+            <h3 id="patTitle">Pick a pattern</h3>
+            <p id="patDesc" style="color:var(--text3);font-size:.82rem"></p>
+            <textarea id="patInput" style="margin-top:8px;min-height:150px" placeholder="Paste the text to run the pattern on…"></textarea>
+            <div class="row"><button class="btn primary" id="patRun" onclick="runPattern()" disabled>Run pattern</button>
+              <span style="color:var(--text3);font-size:12px;align-self:center">uses your current model</span></div>
+            <div id="patOut" class="md" style="margin-top:12px"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -564,6 +597,7 @@
     if(v==='tasks')loadTasks();
     if(v==='flows')loadFlows();
     if(v==='skills')loadSkillsView();
+    if(v==='patterns')loadPatterns();
     if(v==='security'){loadSecurity();loadAudit();}
     if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();loadClaudeStatus();}
   }
@@ -755,6 +789,19 @@
   }catch(e){document.getElementById('secCards').innerHTML='<p style="color:var(--text3)">Security status unavailable.</p>';}}
   async function runExec(){const cmd=document.getElementById('execCmd').value.trim();if(!cmd)return;const out=document.getElementById('execOut');out.style.display='';out.textContent='running…';const r=await api('/api/exec',{command:cmd});out.textContent=(r.blocked?'⛔ '+r.err:(r.out||'')+(r.err?'\n[stderr]\n'+r.err:''))||('(exit '+r.code+')');loadAudit();}
   async function loadAudit(){try{const r=await(await fetch('/api/audit')).json();const a=r.audit||[];document.getElementById('auditList').innerHTML=a.length?a.slice(0,60).map(x=>`<div class="memrow"><span class="t"><span class="pill ${x.ok?'':'bad'}">${esc(x.action)}</span> <span class="mono" style="color:var(--text2)">${esc((x.detail||'').slice(0,90))}</span></span><span style="color:var(--text3);font-size:11px">${esc(x.actor)}</span></div>`).join(''):'<p style="color:var(--text3)">No actions logged yet.</p>';}catch(e){}}
+
+  // ── Patterns (Fabric) ──
+  let PATTERNS=[], patSel=null;
+  async function loadPatterns(){try{const r=await(await fetch('/api/fabric')).json();PATTERNS=r.patterns||[];renderPatterns();}catch(e){document.getElementById('patList').innerHTML='<p style="color:var(--text3)">Patterns unavailable.</p>';}}
+  function renderPatterns(){const q=(document.getElementById('patFilter').value||'').toLowerCase();const list=PATTERNS.filter(p=>!q||p.name.includes(q)||(p.description||'').toLowerCase().includes(q));document.getElementById('patList').innerHTML=list.slice(0,120).map(p=>`<div class="patrow ${patSel===p.name?'sel':''}" onclick="pickPattern('${esc(p.name)}')"><b>${esc(p.name)}</b><small>${esc((p.description||'').slice(0,70))}</small></div>`).join('')||'<p style="color:var(--text3)">No match.</p>';}
+  function pickPattern(name){patSel=name;const p=PATTERNS.find(x=>x.name===name)||{};document.getElementById('patTitle').textContent=name;document.getElementById('patDesc').textContent=p.description||'';document.getElementById('patRun').disabled=false;renderPatterns();}
+  async function runPattern(){if(!patSel)return;const input=document.getElementById('patInput').value.trim();if(!input){toast('Paste some text first');return;}const btn=document.getElementById('patRun');btn.disabled=true;btn.textContent='Running…';const out=document.getElementById('patOut');out.innerHTML='<span class="spin"></span>';try{const r=await api('/api/fabric',{pattern:patSel,input,target});out.innerHTML=mdRender(r.output||'(no output)');}catch(e){out.textContent='Error: '+e;}btn.disabled=false;btn.textContent='Run pattern';}
+
+  // ── Caveman mode ──
+  const CAVE_CYCLE=['off','lite','full','ultra','wenyan-full'];
+  async function loadCaveman(){try{const s=await(await fetch('/api/caveman')).json();updateCaveBtn(s.enabled?s.level:'off');}catch(e){}}
+  function updateCaveBtn(level){const b=document.getElementById('caveBtn');if(!b)return;b.textContent='🗿 Caveman: '+level;b.classList.toggle('primary',level!=='off');}
+  async function cycleCaveman(){const cur=(document.getElementById('caveBtn').textContent.split(':')[1]||'off').trim();const next=CAVE_CYCLE[(CAVE_CYCLE.indexOf(cur)+1)%CAVE_CYCLE.length];await api('/api/caveman',{enabled:next!=='off',level:next==='off'?'full':next});updateCaveBtn(next);toast(next==='off'?'Caveman off — normal replies':'🗿 Caveman '+next+' — every agent replies terse');}
   async function loadPrompts(){try{const r=await(await fetch('/api/prompts')).json();PROMPTS=r.prompts||[];const el=document.getElementById('promptList');if(el)el.innerHTML=PROMPTS.length?PROMPTS.map(p=>`<div class="memrow"><span class="t"><b class="mono">/${esc(p.name)}</b> — ${esc((p.text||'').slice(0,70))}</span><button class="btn sm danger" onclick="delPrompt('${p.name}')">✕</button></div>`).join(''):'<p style="color:var(--text3)">No saved prompts.</p>';}catch(e){}}
   async function addPrompt(){const n=document.getElementById('promptName').value.trim(),t=document.getElementById('promptText').value.trim();if(!n||!t)return;await api('/api/prompts',{op:'add',name:n,text:t});document.getElementById('promptName').value='';document.getElementById('promptText').value='';toast('Prompt saved — type /'+n+' in chat');loadPrompts();}
   async function delPrompt(n){await api('/api/prompts',{op:'delete',name:n});loadPrompts();}
@@ -900,7 +947,7 @@
     }catch(e){}
   }
   refresh();setInterval(refresh,5000);
-  renderConvs();renderMsgs();loadPrompts();refreshUsage();
+  renderConvs();renderMsgs();loadPrompts();refreshUsage();loadCaveman();
   if(innerWidth<=760)document.getElementById('menuBtn').style.display='grid';
 </script>
 </body>

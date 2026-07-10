@@ -237,6 +237,13 @@ That is deliberately the "ambient authority" posture that made **OpenClaw's CVE-
 
 **Active Memory:** a memory sub-agent runs on **every** turn — recall is a free FTS5 query, fact-extraction is one small async call — so the agents actually learn your workflow over time instead of only reading memory at session start (`memory.active`).
 
+## 🧵 Fabric patterns & 🗿 Caveman mode
+
+Two more open-source projects, wired in at the prompt level (no extra service to run):
+
+- **[Fabric](https://github.com/danielmiessler/fabric) — 255 patterns.** Fabric's "patterns" are curated system-prompts (`summarize`, `extract_wisdom`, `analyze_claims`, `write_essay`, `create_quiz`…). AIOS reads them straight from `data/patterns/` and runs them **on your configured model** — including your Claude subscription — so there's no Go binary to install. Use them in the **Patterns** view (pick → paste → run) or inline in chat: `/p summarize <text>`. The `fabric` chat target also works: `fabric` with a message `pattern: your text`.
+- **[Caveman](https://github.com/JuliusBrussee/caveman) — conciseness mode.** A system-prompt overlay that makes every agent ~65% terser while keeping code, commands, and error strings exact. Toggle the **🗿 Caveman** button in the composer (cycles off → lite → full → ultra → wenyan), or type `/caveman [level]` / `/caveman off` in chat. It's also mounted as a skill into opencode/hermes/openclaw, so they respect it too. Levels come straight from Caveman's own SKILL.md.
+
 **On WSL?** `127.0.0.1:8787` often won't reach WSL from your Windows browser (localhost-forwarding is flaky). `aios start`/`aios url` now print your **WSL IP** URL — use that (e.g. `http://172.31.x.x:8787/`). The hub binds `0.0.0.0` so the WSL IP always works.
 
 ## ⚙️ Configuration

@@ -111,7 +111,7 @@ def read_system_prompt() -> str:
 
 
 # Chat "targets" the AIOS API exposes as OpenAI-style models.
-TARGETS = ["brain", "team", "opencode", "crewai", "claudecode", "all"]
+TARGETS = ["brain", "team", "opencode", "crewai", "claudecode", "fabric", "all"]
 
 MEMORY_FILE = ROOT / ".aios" / "memory.json"
 USAGE_FILE = ROOT / ".aios" / "usage.json"
@@ -373,6 +373,45 @@ def ask_claudecode(message: str, history: list | None = None) -> str:
         return f"⚠️ claude-code-api not reachable ({e}). Start it (`aios start claudecode`) and make sure the `claude` CLI is installed + authenticated."
 
 
+# --------------------------------------------------------------------------- #
+# Caveman mode — a system-prompt overlay (JuliusBrussee/caveman) that makes      #
+# every agent ~65% terser while keeping technical accuracy. State persists so    #
+# the toggle survives restarts; levels come from caveman's own SKILL.md.         #
+# --------------------------------------------------------------------------- #
+CAVEMAN_FILE = ROOT / ".aios" / "caveman.json"
+
+
+def caveman_state() -> dict:
+    return _load_json(CAVEMAN_FILE, {"enabled": False, "level": "full"})
+
+
+def set_caveman(enabled: bool, level: str = "full") -> dict:
+    lvl = level if level in tools.CAVEMAN_LEVELS else "full"
+    st = {"enabled": bool(enabled), "level": lvl}
+    _save_json(CAVEMAN_FILE, st)
+    return st
+
+
+def caveman_prompt_suffix() -> str:
+    st = caveman_state()
+    return tools.caveman_overlay(st["level"]) if st.get("enabled") else ""
+
+
+# --------------------------------------------------------------------------- #
+# Fabric — run any of the 255 danielmiessler/fabric patterns through AIOS's own  #
+# model path. A pattern is a system prompt; the user's text is the input.        #
+# --------------------------------------------------------------------------- #
+def run_fabric(pattern: str, text: str, target: str = "brain") -> str:
+    system = tools.fabric_pattern_system(pattern)
+    if system is None:
+        return f"⚠️ Unknown fabric pattern '{pattern}'. See the Patterns view for the full list."
+    system += caveman_prompt_suffix()
+    # Route through claude-code when the brain is on the subscription, else the LLM.
+    if target in ("claudecode", "claude-code"):
+        return ask_claudecode(text, [{"role": "system", "content": system}])
+    return llm_chat([{"role": "user", "content": text}], system=system)
+
+
 TOOL_PROTOCOL = (
     "\n\nFULL CONTROL: you control the computer AIOS is installed on. To run a shell "
     "command, emit a line of exactly this form:\n"
@@ -397,7 +436,8 @@ def brain_system_prompt(message: str) -> str:
              "OpenUI-style generative UI (https://www.openui.com).")
     if tools.full_control():
         sysp += TOOL_PROTOCOL
-    sysp += active_recall(message)  # Active Memory: relevant context, every turn
+    sysp += active_recall(message)      # Active Memory: relevant context, every turn
+    sysp += caveman_prompt_suffix()     # Caveman mode: terser output when toggled on
     return sysp
 
 
@@ -460,6 +500,12 @@ def route(target: str, message: str, history: list | None = None) -> str:
         return ask_opencode(message)
     if target in ("claudecode", "claude-code"):
         return ask_claudecode(message, history)
+    if target == "fabric":
+        # "pattern: text"  →  run that fabric pattern; else summarize by default.
+        pat, _, txt = message.partition(":")
+        if txt.strip():
+            return run_fabric(pat.strip(), txt.strip())
+        return run_fabric("summarize", message)
     if target in ("team", "auto", "merge"):
         return run_team(message, history)
     if target == "all":
@@ -1035,6 +1081,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"channels": tools.channels()})
         elif self.path == "/api/skills":
             self._send(200, {"skills": tools.skills(), "learned": brain.skill_list()})
+        elif self.path == "/api/fabric":
+            self._send(200, {"patterns": tools.fabric_patterns(), "bin": bool(tools.fabric_bin())})
+        elif self.path == "/api/caveman":
+            self._send(200, {**caveman_state(), "levels": tools.CAVEMAN_LEVELS})
         elif self.path == "/api/tasks":
             self._send(200, {"tasks": brain.task_list()})
         elif self.path == "/api/task_runs":
@@ -1098,6 +1148,27 @@ class Handler(BaseHTTPRequestHandler):
             target = payload.get("target") or payload.get("to") or "brain"
             message = payload.get("message", "")
             history = payload.get("history", [])
+            # Inline commands: /caveman [level|off], /cave …
+            cmd = message.strip().lower()
+            if cmd.startswith(("/caveman", "/cave")):
+                arg = message.strip().split(None, 1)[1].strip().lower() if len(message.split()) > 1 else ""
+                if arg in ("off", "stop", "normal"):
+                    set_caveman(False)
+                    self._send(200, {"target": target, "reply": "Caveman mode **off** — normal replies.", "ran": []})
+                else:
+                    st = set_caveman(True, arg or caveman_state()["level"])
+                    self._send(200, {"target": target,
+                                     "reply": f"🗿 Caveman mode **on** · level **{st['level']}**. "
+                                     f"Every agent now replies terse. `/caveman off` to stop.", "ran": []})
+                return
+            # Inline fabric: /p <pattern> <text>  or  /pattern <name> <text>
+            if cmd.startswith(("/p ", "/pattern ")):
+                rest = message.split(None, 1)[1] if len(message.split()) > 1 else ""
+                pat, _, txt = rest.partition(" ")
+                reply = run_fabric(pat.strip(), txt.strip() or " ".join(m.get("content", "")
+                                   for m in history if m.get("role") == "user")[-4000:])
+                self._send(200, {"target": "fabric", "reply": reply, "ran": []})
+                return
             reply = route(target, message, history)
             ran = commands_this_turn()
             remember_async(message, reply)      # Active Memory: learn from every turn
@@ -1190,6 +1261,13 @@ class Handler(BaseHTTPRequestHandler):
                                                     payload.get("content", "")))
             else:
                 self._send(400, {"error": "unknown op"})
+        elif self.path == "/api/fabric":
+            out = run_fabric(payload.get("pattern", "summarize"), payload.get("input", ""),
+                             target=payload.get("target", "brain"))
+            self._send(200, {"pattern": payload.get("pattern"), "output": out})
+        elif self.path == "/api/caveman":
+            st = set_caveman(payload.get("enabled", False), payload.get("level", "full"))
+            self._send(200, st)
         elif self.path == "/api/tasks":
             op = payload.get("op", "add")
             if op == "add":
