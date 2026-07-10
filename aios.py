@@ -1298,6 +1298,8 @@ def ensure_hub_token(quiet=False) -> str:
 
 def cmd_start(args):
     cfg = load_config()
+    ensure_hub_token(quiet=True)  # guarantee the token exists BEFORE the hub binds, so
+                                  # reaching it by IP/from another machine never 401s
     secrets = load_env(ENV_PATH)
     _no_upd = os.environ.get("AIOS_NO_UPDATE_CHECK") == "1"  # set by the hub's watchdog
     if not _no_upd and cfg_get(cfg, "updates.auto_update", False):
@@ -1913,12 +1915,16 @@ def _wsl_ip() -> str | None:
 
 def _print_urls(cfg):
     hbp = int(cfg_get(cfg, "services.hub.port", 8787))
+    tok = load_env(ROOT / ".env").get("AIOS_HUB_TOKEN", "")
+    q = f"?token={tok}" if tok else ""
     say(f"{C.B}★ Control Room — talk to everything{C.R}")
     say(f"  {C.CYN}http://127.0.0.1:{hbp}/{C.R}   (the AIOS Hub dashboard)")
     if _is_wsl():
         ip = _wsl_ip()
         if ip:
-            say(f"  {C.B}{C.YEL}WSL → open THIS in your Windows browser: http://{ip}:{hbp}/{C.R}")
+            # A WSL-IP request is non-loopback, so it MUST carry the token — the browser
+            # remembers it after the first visit, so later links can drop the ?token=.
+            say(f"  {C.B}{C.YEL}WSL → open THIS in your Windows browser: http://{ip}:{hbp}/{q}{C.R}")
             say(f"  {C.GRY}(127.0.0.1 may not forward from Windows to WSL — the IP above always works){C.R}")
     say(f"\n{C.B}Individual surfaces{C.R}")
     osurl = _openclaw_os_url(cfg)
