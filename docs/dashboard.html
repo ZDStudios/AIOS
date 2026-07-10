@@ -315,8 +315,22 @@
           <h3>🔗 Connect your Claude account (Pro / Max)</h3>
           <p>Use your Claude subscription for the Brain, Team and crews — routed through <b>claude-code</b>,
              no API key or per-token cost. One click points everything at it and re-renders.</p>
-          <div class="row"><button class="btn primary" onclick="connectClaude()">Use my Claude subscription</button><span id="claudeMsg" class="kv"></span></div>
-          <p style="font-size:.8rem;color:var(--text3);margin-top:12px"><b>The login happens in your terminal, not here.</b> First run <span class="mono" style="color:var(--accent-strong)">aios claude-login</span> — it opens your browser to authorize your Pro/Max account (or paste a code). Then click the button above to route everything through it.</p>
+          <div id="claudeStatus" class="kv" style="margin-top:10px">checking…</div>
+          <div class="row">
+            <button class="btn" onclick="claudeLoginStart()">1 · Log in to Claude</button>
+            <button class="btn primary" onclick="connectClaude()">2 · Use my Claude subscription</button>
+            <span id="claudeMsg" class="kv"></span>
+          </div>
+          <div id="loginBox" style="display:none;margin-top:14px">
+            <div id="loginUrl" style="margin-bottom:8px"></div>
+            <pre id="loginOut" class="mono" style="background:var(--sunk);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:190px;overflow:auto;font-size:.76rem;white-space:pre-wrap">starting…</pre>
+            <div class="inrow" style="margin-top:8px">
+              <input id="loginIn" placeholder="paste the code here, then press Enter" onkeydown="if(event.key==='Enter')claudeLoginSend()">
+              <button class="btn" onclick="claudeLoginSend()">Send</button>
+              <button class="btn sm danger" onclick="claudeLoginStop()">Stop</button>
+            </div>
+          </div>
+          <p style="font-size:.78rem;color:var(--text3);margin-top:12px">Log in right here — the hub runs the Claude CLI login, shows you the authorize link, and you paste the code back. (Terminal equivalent: <span class="mono">aios claude-login</span>.)</p>
         </div>
         <div class="card">
           <h3>🔑 Model provider</h3>
@@ -367,7 +381,14 @@
     <!-- STATUS -->
     <div id="status" class="view">
       <div class="vhead"><h2>📊 Status</h2><span class="sub">live health of every service</span><div class="right"><button class="btn sm" onclick="act('start')">▶ Start all</button><button class="btn sm danger" onclick="act('stop')">■ Stop all</button></div></div>
-      <div class="vbody pad"><div class="stat-grid" id="statgrid"></div></div>
+      <div class="vbody pad">
+        <div class="stat-grid" id="statgrid"></div>
+        <h3 style="margin-top:26px;font-size:1rem;display:flex;align-items:center;gap:8px">🛡️ Self-healing log
+          <span class="badge up" style="font-weight:600">watchdog on</span>
+          <button class="btn sm" style="margin-left:auto" onclick="loadHealEvents()">↻</button></h3>
+        <p style="color:var(--text3);font-size:.84rem;margin-top:4px">If an agent stops responding, the hub restarts it automatically. If the restart fails, a healthy agent reads its logs and diagnoses the cause.</p>
+        <div id="healEvents" style="margin-top:12px;max-width:820px"></div>
+      </div>
     </div>
   </div>
 </main>
@@ -422,8 +443,9 @@
     if(v==='claudecode')agentPanel('claudecode','claudecodeBody','Claude Code exposed as an OpenAI-compatible API. Chat with it (target “claude-code”), or point any tool at <span class="mono">'+(peers.claudecode||'http://127.0.0.1:8000')+'/v1</span>. Needs the <span class="mono">claude</span> CLI installed + authenticated.',peers.claudecode);
     if(v==='automations')loadSchedules();
     if(v==='canvas')loadCanvas();
+    if(v==='status')loadHealEvents();
     if(v==='memory'){loadMem();loadPrompts();}
-    if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();}
+    if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();loadClaudeStatus();}
   }
   function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
   function agentPanel(key,bodyId,desc,url,external){
@@ -598,6 +620,42 @@
       sel.innerHTML='<option value="">— pick a model —</option>'+models.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('')+'<option value="__custom__">✎ custom (type below)</option>';
       hint.textContent=models.length?(models.length+' models loaded from '+(r.base||'provider')):(r.error?('couldn\'t fetch: '+r.error):'No models — connect a provider or run aios claude-login first.');
     }catch(e){sel.innerHTML='<option value="">fetch failed</option>';hint.textContent='could not reach the hub: '+e;}
+  }
+  // ── Claude login, right from the dashboard ──
+  async function loadClaudeStatus(){
+    const el=document.getElementById('claudeStatus');if(!el)return;el.innerHTML='<span class="spin"></span> checking claude-code…';
+    try{const s=await(await fetch('/api/claude_status')).json();
+      el.innerHTML = !s.service_up ? `❌ ${esc(s.error||'claude-code not running')}`
+        : (s.logged_in ? `✅ claude-code up (${esc(s.version)}) · <b style="color:var(--success)">logged in</b> · model <span class="mono">${esc(s.model)}</span>`
+                       : `⚠️ claude-code up (${esc(s.version)}) · <b style="color:var(--danger)">not logged in</b> — click “Log in to Claude”`);
+    }catch(e){el.textContent='could not reach the hub';}
+  }
+  let loginPoll=null;
+  async function claudeLoginStart(){
+    document.getElementById('loginBox').style.display='block';
+    document.getElementById('loginOut').textContent='starting…';
+    const r=await api('/api/claude_login',{op:'start',mode:'setup-token'});
+    if(!r.ok){toast(r.error||'could not start login');document.getElementById('loginOut').textContent=r.error||'failed to start';return;}
+    toast('Login started — open the link, then paste the code');
+    if(loginPoll)clearInterval(loginPoll);loginPoll=setInterval(pollLogin,1500);pollLogin();
+  }
+  async function pollLogin(){
+    try{const s=await(await fetch('/api/claude_login')).json();
+      document.getElementById('loginOut').textContent=s.output||'(waiting for the CLI…)';
+      document.getElementById('loginUrl').innerHTML=s.url?`<a href="${s.url}" target="_blank" class="btn sm primary">🔗 Open this link to authorize</a>`:'';
+      if(!s.running){clearInterval(loginPoll);loginPoll=null;toast('Login session ended');loadClaudeStatus();}
+    }catch(e){}
+  }
+  async function claudeLoginSend(){const i=document.getElementById('loginIn');if(!i.value.trim())return;await api('/api/claude_login',{op:'input',text:i.value});i.value='';setTimeout(pollLogin,700);}
+  async function claudeLoginStop(){await api('/api/claude_login',{op:'stop'});if(loginPoll){clearInterval(loginPoll);loginPoll=null;}loadClaudeStatus();}
+  // ── self-healing log ──
+  async function loadHealEvents(){
+    const el=document.getElementById('healEvents');if(!el)return;
+    try{const r=await(await fetch('/api/health_events')).json();const ev=r.events||[];
+      const ic={down:'⚠️',healed:'✅',failed:'❌'};
+      el.innerHTML=ev.length?ev.slice(0,12).map(e=>`<div class="memrow"><span class="t"><b>${ic[e.kind]||'•'} ${esc(e.service)}</b> <span style="color:var(--text3);font-size:.76rem">${new Date(e.ts*1000).toLocaleString()}</span><br><span style="font-size:.84rem;white-space:pre-wrap">${esc(e.message)}</span></span></div>`).join('')
+        :'<p style="color:var(--text3)">No incidents. The watchdog restarts any agent that stops responding, and asks a healthy agent to diagnose it if the restart fails.</p>';
+    }catch(e){el.innerHTML='<p style="color:var(--text3)">Watchdog unavailable.</p>';}
   }
   async function connectClaude(){
     document.getElementById('claudeMsg').innerHTML='<span class="spin"></span> connecting…';

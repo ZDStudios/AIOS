@@ -54,6 +54,10 @@ updates:
   check_on_start: true     # on `aios start`, check the repo for updates and notify
   auto_update: true        # on `aios start`, auto git-pull + reinstall if the repo changed
 
+watchdog:
+  enabled: true            # if an agent stops responding, auto-restart it
+  interval: 45             # seconds between health sweeps; a healthy agent diagnoses failures
+
 # Health-check URLs aios waits on during `start` and checks in `status`/`smoke`.
 health:
   opencode: http://127.0.0.1:4096/

@@ -73,6 +73,7 @@ def run_aios(*a, background=False):
     env = dict(os.environ)
     for k in ("AIOS_LLM_PROVIDER", "AIOS_LLM_API_KEY", "AIOS_LLM_BASE_URL", "AIOS_DEFAULT_MODEL"):
         env.pop(k, None)
+    env["AIOS_NO_UPDATE_CHECK"] = "1"  # never git-pull during a hub-triggered restart
     if background:
         threading.Thread(target=lambda: subprocess.run(cmd, cwd=str(ROOT), env=env,
                          capture_output=True), daemon=True).start()
@@ -393,6 +394,196 @@ def dry_run(target: str, message: str, history: list | None = None) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Watchdog — if an agent goes down, restart it; if that fails, an agent debugs #
+# --------------------------------------------------------------------------- #
+HEALTH_FILE = ROOT / ".aios" / "health_events.json"
+WATCH = ["opencode", "hermes", "openclaw", "crewai", "claudecode"]
+_wd = {"seen_up": {}, "last_restart": {}}
+
+
+def _log_event(kind: str, svc: str, msg: str):
+    ev = _load_json(HEALTH_FILE, [])
+    ev.insert(0, {"ts": time.time(), "kind": kind, "service": svc, "message": str(msg)[:2000]})
+    _save_json(HEALTH_FILE, ev[:60])
+
+
+def _service_logs(svc: str, n: int = 40) -> str:
+    return (run_aios("logs", svc, "-n", str(n)).get("out") or "")[-3000:]
+
+
+def _diagnose(svc: str, logtail: str) -> str:
+    """Ask a healthy agent to debug the crashed one."""
+    q = (f"The AI OS service '{svc}' stopped responding and an automatic restart did not fix it.\n"
+         f"Log tail:\n\n{logtail}\n\n"
+         "In at most 3 bullets: the likely root cause, and the exact command to fix it.")
+    try:
+        helper = "opencode" if ping(PEERS.get("opencode", "")) else "brain"
+        return route(helper, q)
+    except Exception as e:
+        return f"(diagnosis unavailable: {e})"
+
+
+def _watchdog_loop():
+    if os.environ.get("AIOS_WATCHDOG", "1") != "1":
+        return
+    interval = int(os.environ.get("AIOS_WATCHDOG_INTERVAL", "45"))
+    time.sleep(20)  # let the stack finish booting before we judge it
+    while True:
+        try:
+            for svc in WATCH:
+                url = PEERS.get(svc)
+                if not url:
+                    continue
+                if ping(url):
+                    _wd["seen_up"][svc] = time.time()
+                    continue
+                # Only heal services we've actually seen alive (never auto-start disabled ones)
+                if not _wd["seen_up"].get(svc):
+                    continue
+                if time.time() - _wd["last_restart"].get(svc, 0) < 180:
+                    continue  # rate-limit: no restart storms
+                _wd["last_restart"][svc] = time.time()
+                _log_event("down", svc, f"{svc} stopped responding — auto-restarting…")
+                run_aios("restart", svc)
+                time.sleep(20)
+                if ping(url):
+                    _log_event("healed", svc, f"{svc} is back up (automatic restart).")
+                else:
+                    diag = _diagnose(svc, _service_logs(svc))
+                    _log_event("failed", svc, f"Restart didn't fix {svc}. Agent diagnosis:\n{diag}")
+        except Exception:
+            pass
+        time.sleep(interval)
+
+
+# --------------------------------------------------------------------------- #
+# Claude login from the dashboard (interactive CLI session over HTTP)          #
+# --------------------------------------------------------------------------- #
+class _LoginSession:
+    proc = None
+    master = None
+    out = ""
+    lock = threading.Lock()
+
+
+_login = _LoginSession()
+_ANSI = __import__("re").compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07|\r")
+
+
+def _claude_bin():
+    return shutil.which("claude") or shutil.which("claude.cmd")
+
+
+def claude_login_start(mode: str = "setup-token") -> dict:
+    claude = _claude_bin()
+    if not claude:
+        return {"ok": False, "error": "`claude` CLI not found on PATH."}
+    if _login.proc and _login.proc.poll() is None:
+        return {"ok": True, "already": True}
+    with _login.lock:
+        _login.out = ""
+    args = [claude] + ([mode] if mode else [])
+    try:
+        if os.name != "nt":
+            import pty
+            m, s = pty.openpty()
+            _login.master = m
+            _login.proc = subprocess.Popen(args, stdin=s, stdout=s, stderr=s,
+                                           env=dict(os.environ), close_fds=True)
+            os.close(s)
+
+            def _rd():
+                while True:
+                    try:
+                        d = os.read(m, 4096)
+                    except OSError:
+                        break
+                    if not d:
+                        break
+                    with _login.lock:
+                        _login.out += d.decode(errors="replace")
+            threading.Thread(target=_rd, daemon=True).start()
+        else:
+            _login.master = None
+            _login.proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                           stderr=subprocess.STDOUT, text=True, bufsize=1,
+                                           env=dict(os.environ))
+
+            def _rd():
+                for line in _login.proc.stdout:
+                    with _login.lock:
+                        _login.out += line
+            threading.Thread(target=_rd, daemon=True).start()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def claude_login_input(text: str) -> dict:
+    if not (_login.proc and _login.proc.poll() is None):
+        return {"ok": False, "error": "no login session running"}
+    try:
+        data = (text or "") + "\n"
+        if _login.master is not None:
+            os.write(_login.master, data.encode())
+        else:
+            _login.proc.stdin.write(data)
+            _login.proc.stdin.flush()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def claude_login_state() -> dict:
+    with _login.lock:
+        raw = _login.out[-8000:]
+    running = bool(_login.proc and _login.proc.poll() is None)
+    urls = __import__("re").findall(r"https?://[^\s\"'<>]+", raw)
+    return {"output": _ANSI.sub("", raw), "running": running,
+            "exit": (_login.proc.poll() if _login.proc else None),
+            "url": urls[-1] if urls else ""}
+
+
+def claude_login_stop() -> dict:
+    if _login.proc and _login.proc.poll() is None:
+        try:
+            _login.proc.kill()
+        except Exception:
+            pass
+    return {"ok": True}
+
+
+def claude_status() -> dict:
+    """Is claude-code-api up, and is the Claude CLI actually authenticated?"""
+    st = {"service_up": False, "version": "", "logged_in": False, "model": "", "error": ""}
+    try:
+        h = json.loads(urllib.request.urlopen(CLAUDECODE + "/health", timeout=6).read())
+        st["service_up"] = True
+        st["version"] = h.get("claude_version", "")
+    except Exception as e:
+        st["error"] = f"claude-code-api not reachable — run `aios start claudecode` ({e})"
+        return st
+    model = "claude-sonnet-4-5"
+    try:
+        ids = _models_from(CLAUDECODE + "/v1")
+        if ids:
+            model = next((i for i in ids if "sonnet" in i.lower()), ids[0])
+    except Exception:
+        pass
+    st["model"] = model
+    try:  # cold start of the claude CLI is slow — be generous
+        b = json.dumps({"model": model, "messages": [{"role": "user", "content": "hi"}],
+                        "max_tokens": 16}).encode()
+        rq = urllib.request.Request(CLAUDECODE + "/v1/chat/completions", data=b, method="POST",
+                                    headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(rq, timeout=180)
+        st["logged_in"] = True
+    except Exception as e:
+        st["error"] = f"Claude CLI not authenticated (or timed out): {str(e)[:200]}"
+    return st
+
+
+# --------------------------------------------------------------------------- #
 # "Team" — a single agent that orchestrates the others (the practical merge)   #
 # --------------------------------------------------------------------------- #
 AGENT_TOOLS = {
@@ -560,6 +751,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"usage": u, "total": sum(u.values()), "free_requests": free})
         elif self.path == "/api/ui":
             self._send(200, {"widgets": _load_json(WIDGETS_FILE, [])})
+        elif self.path == "/api/health_events":
+            self._send(200, {"events": _load_json(HEALTH_FILE, [])})
+        elif self.path == "/api/claude_status":
+            self._send(200, claude_status())
+        elif self.path == "/api/claude_login":
+            self._send(200, claude_login_state())
         elif self.path in ("/v1/models", "/api/v1/models"):
             # AIOS as an OpenAI-compatible API: its "models" are the chat targets.
             now = int(time.time())
@@ -639,7 +836,7 @@ class Handler(BaseHTTPRequestHandler):
                     rq = urllib.request.Request(CLAUDECODE + "/v1/chat/completions", data=b, method="POST",
                                                 headers={"Content-Type": "application/json",
                                                          "Authorization": "Bearer sk-aios-claudecode"})
-                    urllib.request.urlopen(rq, timeout=45)
+                    urllib.request.urlopen(rq, timeout=180)  # claude CLI cold start is slow
                     logged_in = True
                 except Exception as e:
                     detail = str(e)[:160]
@@ -649,6 +846,16 @@ class Handler(BaseHTTPRequestHandler):
                          "Pointed at claude-code, but the Claude CLI isn't logged in yet. Run "
                          "`aios claude-login` (or `claude setup-token`) in a terminal to authorize your "
                          "Pro/Max account, then chat.")})
+        elif self.path == "/api/claude_login":
+            op = payload.get("op", "start")
+            if op == "start":
+                self._send(200, claude_login_start(payload.get("mode", "setup-token")))
+            elif op == "input":
+                self._send(200, claude_login_input(payload.get("text", "")))
+            elif op == "stop":
+                self._send(200, claude_login_stop())
+            else:
+                self._send(400, {"error": "unknown op"})
         elif self.path == "/api/dryrun":
             self._send(200, dry_run(payload.get("target", "brain"), payload.get("message", ""),
                                     payload.get("history", [])))
@@ -752,6 +959,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     threading.Thread(target=_scheduler_loop, daemon=True).start()
+    threading.Thread(target=_watchdog_loop, daemon=True).start()  # auto-heal downed agents
     # Bind all interfaces by default so the Windows browser can reach it over WSL.
     host = os.environ.get("AIOS_HUB_HOST", "0.0.0.0")
     srv = ThreadingHTTPServer((host, PORT), Handler)

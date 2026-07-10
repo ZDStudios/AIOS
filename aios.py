@@ -467,6 +467,9 @@ def service_specs(cfg: dict) -> dict:
             "AIOS_HUB_PORT": str(hport),
             "AIOS_OPENCODE_DIR": str(oc / "packages" / "opencode") if oc else "",
             "AIOS_BUN": find_tool("bun") or "",
+            # watchdog: auto-restart downed agents, then have an agent diagnose failures
+            "AIOS_WATCHDOG": "1" if cfg_get(cfg, "watchdog.enabled", True) else "0",
+            "AIOS_WATCHDOG_INTERVAL": str(cfg_get(cfg, "watchdog.interval", 45)),
         },
     }
     return specs
@@ -1203,12 +1206,13 @@ def wire_openclaw_os(quiet=False):
 def cmd_start(args):
     cfg = load_config()
     secrets = load_env(ENV_PATH)
-    if cfg_get(cfg, "updates.auto_update", False):
+    _no_upd = os.environ.get("AIOS_NO_UPDATE_CHECK") == "1"  # set by the hub's watchdog
+    if not _no_upd and cfg_get(cfg, "updates.auto_update", False):
         if _git_pull() is True:  # new commits arrived → refresh deps/config
             _install_all(cfg)
             render_native(cfg, secrets)
             cfg = load_config()
-    elif cfg_get(cfg, "updates.check_on_start", True):
+    elif not _no_upd and cfg_get(cfg, "updates.check_on_start", True):
         _check_updates_notice()
     if not secrets.get("AIOS_LLM_API_KEY") and not any(secrets.get(v) for v in PROVIDER_VAR.values()):
         warn("no model API key set — the stack runs, but agents need a key to answer "
