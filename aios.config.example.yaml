@@ -71,8 +71,17 @@ skills:
                            # skills/learned/<name>/SKILL.md, which every agent then mounts
 
 updates:
-  check_on_start: true     # on `aios start`, check the repo for updates and notify
+  check_on_start: true     # on `aios start`, check the AIOS repo for updates and notify
   auto_update: true        # on `aios start`, auto git-pull + reinstall if the repo changed
+  # Supervised dependency updates: AIOS watches each bundled project's upstream
+  # (openclaw, hermes, opencode, CrewAI, fabric, caveman, ponytail), and when one
+  # moves ahead an AGENT reviews the commits + changed files and returns
+  # SAFE / RISKY / BLOCK before anything is touched.
+  supervised: true
+  check_interval: 21600    # seconds between upstream scans (6h)
+  auto_apply_safe: true    # auto-apply ONLY content-tier projects (prompts/skills —
+                           # nothing executes) when an agent says SAFE. Service-tier
+                           # projects with dependency trees always wait for you.
 
 watchdog:
   enabled: true            # if an agent stops responding, auto-restart it

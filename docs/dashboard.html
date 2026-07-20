@@ -182,7 +182,7 @@
   .patrow.sel{background:var(--accent-soft);border-left:3px solid var(--accent)}
   .patrow b{font-size:.84rem;color:var(--text)}
   .patrow small{color:var(--text3);font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #caveBtn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+  #modeBtns .btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -220,6 +220,7 @@
     <button class="nav" data-v="skills" onclick="nav('skills')"><span class="ic">🎓</span> Skills</button>
     <button class="nav" data-v="patterns" onclick="nav('patterns')"><span class="ic">🧵</span> Patterns</button>
     <button class="nav" data-v="automations" onclick="nav('automations')"><span class="ic">⏰</span> Automations</button>
+    <button class="nav" data-v="updates" onclick="nav('updates')"><span class="ic">⬆️</span> Updates</button>
     <button class="nav" data-v="security" onclick="nav('security')"><span class="ic">🛡️</span> Control &amp; Audit</button>
     <button class="nav" data-v="settings" onclick="nav('settings')"><span class="ic">⚙️</span> Settings</button>
   </aside>
@@ -255,7 +256,7 @@
           </div>
           <div class="hint" style="margin-top:7px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
             <label style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="speakToggle" style="width:auto"> 🔊 speak replies</label>
-            <button id="caveBtn" class="btn sm" onclick="cycleCaveman()" title="Caveman mode — terser replies (JuliusBrussee/caveman)">🗿 Caveman: off</button>
+            <span id="modeBtns" style="display:flex;gap:6px"></span>
             <span id="usageBadge" style="color:var(--text3)"></span>
             <a onclick="exportConv()" style="cursor:pointer;color:var(--accent-strong)">⬇️ export chat</a>
             <a onclick="openPalette()" style="cursor:pointer;color:var(--text3)">⌘K palette</a>
@@ -404,6 +405,21 @@
             <div id="patOut" class="md" style="margin-top:12px"></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- UPDATES -->
+    <div id="updates" class="view">
+      <div class="vhead"><h2>⬆️ Updates</h2><span class="sub">agents review upstream changes before they land</span></div>
+      <div class="vbody pad" style="max-width:900px">
+        <div class="card">
+          <h3>Supervised updates</h3>
+          <p style="color:var(--text2)">AIOS watches each bundled project's upstream. When one moves ahead, an <b>agent reads the commits and changed files</b> and returns <b>SAFE</b> / <b>RISKY</b> / <b>BLOCK</b> before anything is touched. Applying backs up first, reinstalls dependencies, health-checks the service, and <b>rolls back automatically</b> if it doesn't come back.</p>
+          <div class="row"><button class="btn primary" onclick="scanUpdates()">Check upstreams now</button>
+            <span id="updNote" style="color:var(--text3);font-size:12px;align-self:center"></span></div>
+        </div>
+        <div id="updList" style="margin-top:14px"></div>
+        <div class="card" style="margin-top:14px"><h3>Version pins</h3><div id="updPins" style="margin-top:10px"></div></div>
       </div>
     </div>
 
@@ -598,6 +614,7 @@
     if(v==='flows')loadFlows();
     if(v==='skills')loadSkillsView();
     if(v==='patterns')loadPatterns();
+    if(v==='updates')loadUpdates();
     if(v==='security'){loadSecurity();loadAudit();}
     if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();loadClaudeStatus();}
   }
@@ -797,11 +814,48 @@
   function pickPattern(name){patSel=name;const p=PATTERNS.find(x=>x.name===name)||{};document.getElementById('patTitle').textContent=name;document.getElementById('patDesc').textContent=p.description||'';document.getElementById('patRun').disabled=false;renderPatterns();}
   async function runPattern(){if(!patSel)return;const input=document.getElementById('patInput').value.trim();if(!input){toast('Paste some text first');return;}const btn=document.getElementById('patRun');btn.disabled=true;btn.textContent='Running…';const out=document.getElementById('patOut');out.innerHTML='<span class="spin"></span>';try{const r=await api('/api/fabric',{pattern:patSel,input,target});out.innerHTML=mdRender(r.output||'(no output)');}catch(e){out.textContent='Error: '+e;}btn.disabled=false;btn.textContent='Run pattern';}
 
-  // ── Caveman mode ──
-  const CAVE_CYCLE=['off','lite','full','ultra','wenyan-full'];
-  async function loadCaveman(){try{const s=await(await fetch('/api/caveman')).json();updateCaveBtn(s.enabled?s.level:'off');}catch(e){}}
-  function updateCaveBtn(level){const b=document.getElementById('caveBtn');if(!b)return;b.textContent='🗿 Caveman: '+level;b.classList.toggle('primary',level!=='off');}
-  async function cycleCaveman(){const cur=(document.getElementById('caveBtn').textContent.split(':')[1]||'off').trim();const next=CAVE_CYCLE[(CAVE_CYCLE.indexOf(cur)+1)%CAVE_CYCLE.length];await api('/api/caveman',{enabled:next!=='off',level:next==='off'?'full':next});updateCaveBtn(next);toast(next==='off'?'Caveman off — normal replies':'🗿 Caveman '+next+' — every agent replies terse');}
+  // ── Supervised updates ──
+  const VCOL={SAFE:'up',RISKY:'',BLOCK:'down'};
+  async function loadUpdates(){try{const r=await(await fetch('/api/updates')).json();renderUpdates(r);}catch(e){document.getElementById('updList').innerHTML='<p style="color:var(--text3)">Updates unavailable.</p>';}}
+  function renderUpdates(r){
+    const p=r.pending||[];
+    document.getElementById('updNote').textContent=r.auto_apply?'auto-applies SAFE prompt/skill updates · services always ask you':'auto-apply off — everything waits for you';
+    document.getElementById('updList').innerHTML=p.length?p.map(u=>{const v=(u.review||{});const vc=VCOL[v.verdict]!==undefined?VCOL[v.verdict]:'';
+      return `<div class="card" style="padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <b>${esc(u.name)}</b>
+          <span class="pill">${esc(u.tier)}</span>
+          <span class="pill mono">${esc(String(u.current||''))} → ${esc(String(u.latest||''))}</span>
+          <span class="pill">${u.ahead_by||'?'} commits</span>
+          ${v.verdict?`<span class="badge ${vc}">${esc(v.verdict)}</span>`:''}
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn sm primary" onclick="applyUpdate('${esc(u.name)}')">Apply</button>
+            <button class="btn sm" onclick="updOp('skip','${esc(u.name)}')">Skip</button>
+          </div>
+        </div>
+        ${v.why?`<div style="margin-top:7px;font-size:12.5px;color:var(--text2)"><b>Agent:</b> ${esc(v.why)}</div>`:''}
+        ${v.watch&&v.watch!=='nothing'?`<div style="margin-top:4px;font-size:12px;color:var(--alert)"><b>Watch:</b> ${esc(v.watch)}</div>`:''}
+        ${(u.commits||[]).length?`<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--text3);font-size:12px">${u.commits.length} commits · ${u.files_total||0} files changed</summary><div class="logbox" style="margin-top:8px">${u.commits.map(c=>esc(c.sha+'  '+c.message)).join('\n')}\n\n--- files ---\n${(u.files||[]).map(f=>esc(f.status+'  '+f.path)).join('\n')}</div></details>`:''}
+      </div>`;}).join(''):'<p style="color:var(--text3)">Nothing pending — every upstream is current, or was already applied.</p>';
+    const pins=r.pins||{};
+    document.getElementById('updPins').innerHTML=Object.keys(pins).length?Object.entries(pins).map(([k,v])=>`<div class="memrow"><span class="t"><b>${esc(k)}</b> <span class="mono" style="color:var(--text3)">${esc(String(v.sha||'').slice(0,12))}</span></span>${v.previous?`<button class="btn sm" onclick="updOp('rollback','${esc(k)}')">Roll back</button>`:''}</div>`).join(''):'<p style="color:var(--text3)">No pins yet — run a check.</p>';
+  }
+  async function scanUpdates(){const n=document.getElementById('updNote');n.textContent='checking upstreams + asking the agents…';try{const r=await api('/api/updates',{op:'scan'});renderUpdates({pending:r.pending,pins:(await(await fetch('/api/updates')).json()).pins,auto_apply:true});toast((r.pending||[]).length?`${r.pending.length} update(s) pending review`:'Everything is current');}catch(e){n.textContent='check failed: '+e;}}
+  async function applyUpdate(name){if(!confirm(`Apply the upstream update to "${name}"?\n\nAIOS backs up first, reinstalls dependencies, health-checks the service, and rolls back automatically if it fails.`))return;toast('Applying '+name+' — this can take a few minutes');const r=await api('/api/updates',{op:'apply',project:name});toast(r.ok?`${name} updated → ${r.sha}`:(r.rolled_back?`${name} failed verification — rolled back`:`${name}: ${r.error||'failed'}`));loadUpdates();}
+  async function updOp(op,name){if(op==='rollback'&&!confirm(`Roll "${name}" back to its previous version?`))return;await api('/api/updates',{op,project:name});loadUpdates();}
+
+  // ── Agent modes (caveman = say less · ponytail = build less) ──
+  let MODES=[], MODEST={};
+  async function loadModes(){try{const r=await(await fetch('/api/modes')).json();MODES=r.modes||[];MODEST=r.state||{};renderModeBtns();}catch(e){}}
+  function renderModeBtns(){const el=document.getElementById('modeBtns');if(!el)return;
+    el.innerHTML=MODES.filter(m=>m.available).map(m=>{const s=MODEST[m.name]||{};const lv=s.enabled?s.level:'off';
+      return `<button class="btn sm ${s.enabled?'primary':''}" onclick="cycleMode('${m.name}')" title="${esc(m.label)} — ${esc(m.blurb)} (${esc(m.repo)})">${m.icon} ${esc(m.label)}: ${esc(lv)}</button>`;}).join('');}
+  async function cycleMode(name){const m=MODES.find(x=>x.name===name);if(!m)return;const cyc=['off',...m.levels];
+    const s=MODEST[name]||{enabled:false,level:'full'};const cur=s.enabled?s.level:'off';
+    const next=cyc[(cyc.indexOf(cur)+1)%cyc.length];
+    const r=await api('/api/modes',{mode:name,enabled:next!=='off',level:next==='off'?'full':next});
+    MODEST=r.state||MODEST;renderModeBtns();
+    toast(next==='off'?m.label+' off':`${m.icon} ${m.label} ${next} — ${m.blurb}`);}
   async function loadPrompts(){try{const r=await(await fetch('/api/prompts')).json();PROMPTS=r.prompts||[];const el=document.getElementById('promptList');if(el)el.innerHTML=PROMPTS.length?PROMPTS.map(p=>`<div class="memrow"><span class="t"><b class="mono">/${esc(p.name)}</b> — ${esc((p.text||'').slice(0,70))}</span><button class="btn sm danger" onclick="delPrompt('${p.name}')">✕</button></div>`).join(''):'<p style="color:var(--text3)">No saved prompts.</p>';}catch(e){}}
   async function addPrompt(){const n=document.getElementById('promptName').value.trim(),t=document.getElementById('promptText').value.trim();if(!n||!t)return;await api('/api/prompts',{op:'add',name:n,text:t});document.getElementById('promptName').value='';document.getElementById('promptText').value='';toast('Prompt saved — type /'+n+' in chat');loadPrompts();}
   async function delPrompt(n){await api('/api/prompts',{op:'delete',name:n});loadPrompts();}
@@ -947,7 +1001,7 @@
     }catch(e){}
   }
   refresh();setInterval(refresh,5000);
-  renderConvs();renderMsgs();loadPrompts();refreshUsage();loadCaveman();
+  renderConvs();renderMsgs();loadPrompts();refreshUsage();loadModes();
   if(innerWidth<=760)document.getElementById('menuBtn').style.display='grid';
 </script>
 </body>

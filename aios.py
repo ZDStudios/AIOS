@@ -267,6 +267,7 @@ PROJECTS = {
     # caveman = a conciseness system-prompt overlay.
     "fabric": resolve_root("fabric-main/fabric-main", "fabric-main", "fabric"),
     "caveman": resolve_root("caveman-main/caveman-main", "caveman-main", "caveman"),
+    "ponytail": resolve_root("ponytail-main/ponytail-main", "ponytail-main", "ponytail"),
 }
 
 
@@ -474,6 +475,10 @@ def service_specs(cfg: dict) -> dict:
             # watchdog: auto-restart downed agents, then have an agent diagnose failures
             "AIOS_WATCHDOG": "1" if cfg_get(cfg, "watchdog.enabled", True) else "0",
             "AIOS_WATCHDOG_INTERVAL": str(cfg_get(cfg, "watchdog.interval", 45)),
+            # supervised updates: agents review upstream changes before they land
+            "AIOS_SUPERVISED_UPDATES": "1" if cfg_get(cfg, "updates.supervised", True) else "0",
+            "AIOS_UPDATE_INTERVAL": str(cfg_get(cfg, "updates.check_interval", 21600)),
+            "AIOS_AUTO_APPLY": "1" if cfg_get(cfg, "updates.auto_apply_safe", True) else "0",
         },
     }
     return specs
@@ -803,7 +808,7 @@ def cmd_setup(args):
     # 6c) mount the bundled AI OS skills (skill-maker, mcp-maker, …) into the agents
     if cfg_get(cfg, "skills.mount", True):
         mount_aios_skills(cfg)
-        mount_caveman(cfg)  # caveman conciseness skill → every agent
+        mount_agent_modes(cfg)  # caveman + ponytail skills → every agent
 
     # 7) wire openclaw-os plugin (best-effort; needs openclaw runnable)
     if cfg_get(cfg, "services.openclaw_os.enabled", True) and not args.skip_wire:
@@ -1168,28 +1173,34 @@ def mount_aios_skills(cfg: dict):
     ok(f"mounted {len(names)} skills: {', '.join(names)}")
 
 
-def mount_caveman(cfg: dict):
-    """Mount JuliusBrussee/caveman's skills into every agent, so terser 'caveman
-    mode' is available not just to the hub Brain but to opencode/hermes/openclaw too."""
-    src = PROJECTS.get("caveman") or (ROOT / "caveman-main")
-    skdir = src / "skills"
-    if not skdir.exists():
+def mount_agent_modes(cfg: dict):
+    """Mount the behavioural-mode skills (caveman = say less, ponytail = build less)
+    into every agent, so the modes apply to opencode/hermes/openclaw too — not just
+    the hub Brain, which gets them as a system-prompt overlay."""
+    names, skdirs = [], []
+    for proj in ("caveman", "ponytail"):
+        src = PROJECTS.get(proj) or (ROOT / f"{proj}-main")
+        skdir = src / "skills"
+        if skdir.exists():
+            skdirs.append(skdir)
+    if not skdirs:
         return
-    head("Mounting Caveman skills")
-    names = [p.name for p in skdir.iterdir() if p.is_dir() and (p / "SKILL.md").exists()]
+    head("Mounting agent-mode skills (caveman · ponytail)")
     targets = [Path.home() / ".openclaw" / "skills", Path.home() / ".hermes" / "skills",
                STATE / "skills"]
-    for t in targets:
-        for name in names:
-            try:
-                dst = t / name
-                if dst.exists():
-                    shutil.rmtree(dst)
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(skdir / name, dst)
-            except Exception as e:
-                warn(f"could not mount caveman/{name} → {t}: {e}")
-    ok(f"mounted {len(names)} caveman skills: {', '.join(names)}")
+    for skdir in skdirs:
+        for sk in sorted(p for p in skdir.iterdir() if p.is_dir() and (p / "SKILL.md").exists()):
+            names.append(sk.name)
+            for t in targets:
+                try:
+                    dst = t / sk.name
+                    if dst.exists():
+                        shutil.rmtree(dst)
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(sk, dst)
+                except Exception as e:
+                    warn(f"could not mount {sk.name} → {t}: {e}")
+    ok(f"mounted {len(names)} mode skills: {', '.join(names)}")
 
 
 def mount_openui(cfg: dict):
@@ -1810,6 +1821,76 @@ def cmd_wire(args):
     wire_full_control(load_config())
 
 
+def cmd_updates(args):
+    """Supervised updates: what moved upstream, what the agents think, apply/rollback."""
+    sys.path.insert(0, str(ROOT))
+    import aios_updates as U
+    cfg = load_config()
+
+    if getattr(args, "rollback", None):
+        r = U.rollback(args.rollback)
+        (ok if r.get("ok") else warn)(str(r))
+        return
+
+    if getattr(args, "apply", None):
+        name = args.apply
+        hurl = cfg_get(cfg, f"health.{name}", "")
+        head(f"Applying upstream update: {name}")
+        r = U.apply(name, health_url=hurl, log=lambda m: say(f"{C.GRY}{m}{C.R}"))
+        if r.get("ok"):
+            ok(f"{name} updated → {r['sha']}  (backup: {r['backup']})")
+        elif r.get("rolled_back"):
+            warn(f"{name}: verification failed, rolled back. " + "; ".join(r.get("problems", [])))
+        else:
+            warn(f"{name}: {r.get('error')}")
+        return
+
+    head("Supervised updates — checking upstreams")
+    ups = U.check_all()
+    behind = [u for u in ups if u.get("behind")]
+    for u in ups:
+        st = u.get("status", "?")
+        mark = {"behind": f"{C.YEL}●{C.R}", "current": f"{C.GRN}✓{C.R}",
+                "baseline": f"{C.CYN}·{C.R}", "pinned": f"{C.GRY}·{C.R}"}.get(st, f"{C.GRY}·{C.R}")
+        extra = (f"{u.get('ahead_by', '?')} commits behind" if u.get("behind")
+                 else (u.get("note") or st))
+        say(f"  {mark} {u['name']:<12} {C.GRY}{extra}{C.R}")
+
+    if not behind:
+        say(f"\n{C.GRN}Everything is current.{C.R}")
+        return
+
+    if getattr(args, "check", False):
+        say(f"\n{C.GRY}Run `aios updates` without --check to have the agents review these.{C.R}")
+        return
+
+    # Ask an agent about each pending update, through the running hub if it's up.
+    hub = f"http://127.0.0.1:{cfg_get(cfg, 'services.hub.port', 8787)}"
+    tok = load_env(ROOT / ".env").get("AIOS_HUB_TOKEN", "")
+
+    def ask(target, message, system):
+        body = json.dumps({"target": target, "message": f"{system}\n\n{message}"}).encode()
+        rq = urllib.request.Request(hub + "/api/chat", data=body, method="POST",
+                                    headers={"Content-Type": "application/json",
+                                             "Authorization": "Bearer " + tok})
+        with urllib.request.urlopen(rq, timeout=300) as r:
+            return json.loads(r.read()).get("reply", "")
+
+    head("Agent review")
+    for u in behind:
+        try:
+            v = U.review(u, ask)
+        except Exception as e:
+            warn(f"{u['name']}: could not reach the hub for review ({e}). Is `aios start hub` up?")
+            continue
+        colour = {"SAFE": C.GRN, "RISKY": C.YEL, "BLOCK": C.RED}.get(v["verdict"], C.GRY)
+        say(f"\n  {C.B}{u['name']}{C.R}  {colour}{v['verdict']}{C.R}")
+        say(f"    {C.GRY}{v['why']}{C.R}")
+        if v.get("watch"):
+            say(f"    {C.GRY}watch: {v['watch']}{C.R}")
+        say(f"    {C.GRY}apply with:{C.R} aios updates --apply {u['name']}")
+
+
 def cmd_token(args):
     """Print (or rotate) the hub token."""
     if getattr(args, "rotate", False):
@@ -2037,6 +2118,12 @@ def build_parser():
 
     sub.add_parser("url", help="print dashboard URLs").set_defaults(func=cmd_url)
     sub.add_parser("wire", help="(re)install the openclaw-os plugin + re-apply full control").set_defaults(func=cmd_wire)
+
+    s = sub.add_parser("updates", help="supervised updates: agents review upstream changes first")
+    s.add_argument("--check", action="store_true", help="report only, skip the agent review")
+    s.add_argument("--apply", metavar="PROJECT", help="apply one project's update (verify + auto-rollback)")
+    s.add_argument("--rollback", metavar="PROJECT", help="restore a project's previous version")
+    s.set_defaults(func=cmd_updates)
 
     s = sub.add_parser("token", help="print the hub token (needed for non-loopback access)")
     s.add_argument("--rotate", action="store_true", help="generate a fresh token")

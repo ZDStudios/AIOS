@@ -268,45 +268,73 @@ def fabric_bin() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Caveman — JuliusBrussee/caveman. A system-prompt OVERLAY that makes the agent  #
-# ~65% terser while keeping technical accuracy. We read its own SKILL.md so the  #
-# behaviour stays faithful, and expose the intensity levels it defines.          #
+# Agent modes — behavioural system-prompt OVERLAYS from upstream projects.       #
+# Each is a SKILL.md we read verbatim, so the behaviour and intensity levels     #
+# stay faithful to upstream instead of being paraphrased here. They compose:     #
+# caveman trims how much the agent SAYS, ponytail trims how much it BUILDS.      #
 # --------------------------------------------------------------------------- #
-CAVEMAN_LEVELS = ["lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra"]
+AGENT_MODES = {
+    "caveman": {
+        "dir": "caveman-main", "skill": "skills/caveman/SKILL.md",
+        "levels": ["lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra"],
+        "label": "Caveman", "icon": "🗿", "repo": "JuliusBrussee/caveman",
+        "blurb": "terser replies — ~65% fewer output tokens, technical accuracy kept",
+        "directive": ("Apply this OUTPUT STYLE to every reply from now on (compress the style, "
+                      "not the content; keep code, commands, API names and error strings exact)"),
+        "fallback": ("Respond terse like smart caveman. All technical substance stays; only fluff "
+                     "dies. Drop articles, filler, pleasantries, hedging. Fragments OK. Keep code, "
+                     "API names, CLI commands and exact error strings verbatim. Never announce the style."),
+    },
+    "ponytail": {
+        "dir": "ponytail-main", "skill": "skills/ponytail/SKILL.md",
+        "levels": ["lite", "full", "ultra"],
+        "label": "Ponytail", "icon": "🎀", "repo": "DietrichGebert/ponytail",
+        "blurb": "laziest solution that works — ~54% less code, YAGNI enforced",
+        "directive": ("Apply this ENGINEERING STANCE to every coding task from now on. It governs "
+                      "what you build, not how you speak. Non-coding requests are unaffected"),
+        "fallback": ("You are a lazy senior developer — lazy means efficient, not careless. Question "
+                     "whether the task needs to exist (YAGNI). Standard library before custom code, "
+                     "native platform features before dependencies, one line before fifty. Stop at the "
+                     "first solution that holds."),
+    },
+}
 
-_CAVE_FALLBACK = (
-    "Respond terse like smart caveman. All technical substance stays; only fluff dies. "
-    "Drop articles (a/an/the), filler (just/really/basically), pleasantries, hedging. "
-    "Fragments OK. Short synonyms. No tool-call narration, no decorative tables/emoji. "
-    "Keep technical terms, code, API names, CLI commands and exact error strings verbatim. "
-    "Never invent abbreviations. Never announce the style.")
 
-
-def caveman_skill() -> str:
-    f = ROOT / "caveman-main" / "skills" / "caveman" / "SKILL.md"
+def mode_skill(name: str) -> str:
+    m = AGENT_MODES.get(name)
+    if not m:
+        return ""
+    f = ROOT / m["dir"] / m["skill"]
     if f.exists():
         txt = f.read_text(encoding="utf-8", errors="replace")
-        # Strip the YAML front-matter; keep the behavioural body.
-        if txt.startswith("---"):
+        if txt.startswith("---"):  # strip YAML front-matter, keep the behavioural body
             end = txt.find("---", 3)
             if end > 0:
                 txt = txt[end + 3:].strip()
         return txt
-    return _CAVE_FALLBACK
+    return m["fallback"]
 
 
-def caveman_overlay(level: str = "full") -> str:
-    level = level if level in CAVEMAN_LEVELS else "full"
-    return (f"\n\n## CAVEMAN MODE — intensity: {level}\n"
-            "Apply this output style to every reply from now on (compress the STYLE, not the "
-            "content; keep code, commands, API names and error strings exact):\n\n"
-            + caveman_skill())
+def mode_overlay(name: str, level: str = "full") -> str:
+    m = AGENT_MODES.get(name)
+    if not m:
+        return ""
+    level = level if level in m["levels"] else "full"
+    return (f"\n\n## {m['label'].upper()} MODE — intensity: {level}\n"
+            f"{m['directive']}:\n\n" + mode_skill(name))
+
+
+def agent_modes_meta() -> list[dict]:
+    return [{"name": k, "label": v["label"], "icon": v["icon"], "levels": v["levels"],
+             "blurb": v["blurb"], "repo": v["repo"],
+             "available": (ROOT / v["dir"] / v["skill"]).exists()}
+            for k, v in AGENT_MODES.items()]
 
 
 if __name__ == "__main__":
     print(json.dumps({"full_control": full_control(), "guardrails": guardrails_on(),
                       "channels": len(channels()), "skills": len(skills()),
                       "fabric_patterns": len(fabric_patterns()), "fabric_bin": fabric_bin() or None,
-                      "caveman": bool(caveman_skill())}, indent=2))
+                      "modes": agent_modes_meta()}, indent=2))
     for c in channels():
         print(f"  {'[x]' if c['configured'] else '[ ]'} {c['id']:<20} {c['blurb'][:60]}")

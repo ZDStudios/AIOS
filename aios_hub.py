@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aios_brain as brain    # noqa: E402  durable state: memory, tasks, flows, audit
 import aios_sec as sec        # noqa: E402  the gate in front of full-control mode
 import aios_tools as tools    # noqa: E402  shell + channel/skill catalogs
+import aios_updates as updates  # noqa: E402  agent-supervised dependency updates
 
 PORT = int(os.environ.get("AIOS_HUB_PORT", "8787"))
 ROOT = Path(os.environ.get("AIOS_ROOT", Path(__file__).resolve().parent))
@@ -374,27 +375,36 @@ def ask_claudecode(message: str, history: list | None = None) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Caveman mode — a system-prompt overlay (JuliusBrussee/caveman) that makes      #
-# every agent ~65% terser while keeping technical accuracy. State persists so    #
-# the toggle survives restarts; levels come from caveman's own SKILL.md.         #
+# Agent modes — composable behavioural overlays from upstream projects:          #
+#   caveman  (JuliusBrussee/caveman)  — trims how much the agent SAYS            #
+#   ponytail (DietrichGebert/ponytail) — trims how much the agent BUILDS         #
+# State persists so toggles survive restarts. Both can be on at once.            #
 # --------------------------------------------------------------------------- #
-CAVEMAN_FILE = ROOT / ".aios" / "caveman.json"
+MODES_FILE = ROOT / ".aios" / "modes.json"
 
 
-def caveman_state() -> dict:
-    return _load_json(CAVEMAN_FILE, {"enabled": False, "level": "full"})
+def modes_state() -> dict:
+    st = _load_json(MODES_FILE, {})
+    return {k: {"enabled": bool(st.get(k, {}).get("enabled", False)),
+                "level": st.get(k, {}).get("level", "full")}
+            for k in tools.AGENT_MODES}
 
 
-def set_caveman(enabled: bool, level: str = "full") -> dict:
-    lvl = level if level in tools.CAVEMAN_LEVELS else "full"
-    st = {"enabled": bool(enabled), "level": lvl}
-    _save_json(CAVEMAN_FILE, st)
+def set_mode(name: str, enabled: bool, level: str = "full") -> dict:
+    if name not in tools.AGENT_MODES:
+        return modes_state()
+    st = modes_state()
+    lv = level if level in tools.AGENT_MODES[name]["levels"] else "full"
+    st[name] = {"enabled": bool(enabled), "level": lv}
+    _save_json(MODES_FILE, st)
     return st
 
 
-def caveman_prompt_suffix() -> str:
-    st = caveman_state()
-    return tools.caveman_overlay(st["level"]) if st.get("enabled") else ""
+def modes_prompt_suffix() -> str:
+    """Every enabled mode's overlay, concatenated. They compose cleanly because
+    one governs prose style and the other governs engineering decisions."""
+    return "".join(tools.mode_overlay(n, s["level"])
+                   for n, s in modes_state().items() if s["enabled"])
 
 
 # --------------------------------------------------------------------------- #
@@ -405,7 +415,7 @@ def run_fabric(pattern: str, text: str, target: str = "brain") -> str:
     system = tools.fabric_pattern_system(pattern)
     if system is None:
         return f"⚠️ Unknown fabric pattern '{pattern}'. See the Patterns view for the full list."
-    system += caveman_prompt_suffix()
+    system += modes_prompt_suffix()
     # Route through claude-code when the brain is on the subscription, else the LLM.
     if target in ("claudecode", "claude-code"):
         return ask_claudecode(text, [{"role": "system", "content": system}])
@@ -437,7 +447,7 @@ def brain_system_prompt(message: str) -> str:
     if tools.full_control():
         sysp += TOOL_PROTOCOL
     sysp += active_recall(message)      # Active Memory: relevant context, every turn
-    sysp += caveman_prompt_suffix()     # Caveman mode: terser output when toggled on
+    sysp += modes_prompt_suffix()       # caveman / ponytail overlays when toggled on
     return sysp
 
 
@@ -683,6 +693,76 @@ def _watchdog_loop():
 # --------------------------------------------------------------------------- #
 # Claude login from the dashboard (interactive CLI session over HTTP)          #
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Supervised updates — watch every bundled project's upstream, have an AGENT     #
+# review what changed, then apply only what's safe (and roll back if the         #
+# service doesn't come back healthy).                                            #
+# --------------------------------------------------------------------------- #
+PENDING_FILE = ROOT / ".aios" / "pending_updates.json"
+
+
+def _ask_agent(target: str, message: str, system: str) -> str:
+    """Adapter so aios_updates can consult an agent without importing the hub."""
+    if target == "opencode":
+        return ask_opencode(f"{system}\n\n{message}")
+    return llm_chat([{"role": "user", "content": message}], system=system)
+
+
+def pending_updates() -> list:
+    return _load_json(PENDING_FILE, [])
+
+
+def _health_url_for(svc: str) -> str:
+    return {"opencode": PEERS.get("opencode", ""), "hermes": PEERS.get("hermes", ""),
+            "openclaw": PEERS.get("openclaw", ""), "crewai": PEERS.get("crewai", "") + "/health",
+            "claudecode": PEERS.get("claudecode", "") + "/health"}.get(svc, "")
+
+
+def scan_updates(auto: bool = True) -> list:
+    """Check upstreams, get an agent verdict for anything behind, optionally apply."""
+    found = []
+    for u in updates.check_all():
+        if not u.get("behind"):
+            continue
+        u["review"] = updates.review(u, _ask_agent)
+        u["reviewed_at"] = time.time()
+        v = u["review"]["verdict"]
+        _log_event("update", u["name"],
+                   f"{u['name']}: {u.get('ahead_by', '?')} commits behind — agent verdict {v}. "
+                   f"{u['review']['why'][:180]}")
+        # Content-tier projects (prompts/skills only, nothing executes) may self-apply
+        # when an agent says SAFE. Service-tier always waits for you.
+        auto_ok = (auto and v == "SAFE" and u["tier"] == "content"
+                   and os.environ.get("AIOS_AUTO_APPLY", "1") == "1")
+        if auto_ok:
+            res = updates.apply(u["name"], health_url=_health_url_for(u["name"]),
+                                log=lambda m: _log_event("update", u["name"], m))
+            u["applied"] = res
+            _log_event("healed" if res.get("ok") else "failed", u["name"],
+                       f"auto-applied {u['name']} → {res.get('sha')}" if res.get("ok")
+                       else f"auto-apply failed: {res.get('error')}")
+            if res.get("ok"):
+                tools._FAB_CACHE = None  # patterns may have changed
+                continue  # applied — nothing left pending
+        found.append(u)
+    _save_json(PENDING_FILE, found)
+    return found
+
+
+def _updates_loop():
+    if os.environ.get("AIOS_SUPERVISED_UPDATES", "1") != "1":
+        return
+    every = int(os.environ.get("AIOS_UPDATE_INTERVAL", "21600"))  # 6h
+    time.sleep(90)  # let the stack settle before the first scan
+    while True:
+        try:
+            scan_updates(auto=True)
+            updates.prune_backups()
+        except Exception as e:
+            _log_event("failed", "updates", f"update scan error: {e}")
+        time.sleep(every)
+
+
 class _LoginSession:
     proc = None
     master = None
@@ -1083,8 +1163,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"skills": tools.skills(), "learned": brain.skill_list()})
         elif self.path == "/api/fabric":
             self._send(200, {"patterns": tools.fabric_patterns(), "bin": bool(tools.fabric_bin())})
-        elif self.path == "/api/caveman":
-            self._send(200, {**caveman_state(), "levels": tools.CAVEMAN_LEVELS})
+        elif self.path == "/api/modes":
+            self._send(200, {"state": modes_state(), "modes": tools.agent_modes_meta()})
+        elif self.path == "/api/updates":
+            self._send(200, {"pending": pending_updates(), "pins": updates.pins(),
+                             "reports": updates.reports()[:20],
+                             "auto_apply": os.environ.get("AIOS_AUTO_APPLY", "1") == "1"})
         elif self.path == "/api/tasks":
             self._send(200, {"tasks": brain.task_list()})
         elif self.path == "/api/task_runs":
@@ -1148,18 +1232,20 @@ class Handler(BaseHTTPRequestHandler):
             target = payload.get("target") or payload.get("to") or "brain"
             message = payload.get("message", "")
             history = payload.get("history", [])
-            # Inline commands: /caveman [level|off], /cave …
+            # Inline mode toggles: /caveman [level|off], /ponytail [level|off]
             cmd = message.strip().lower()
-            if cmd.startswith(("/caveman", "/cave")):
+            hit = next((n for n in tools.AGENT_MODES if cmd.startswith("/" + n)), None)
+            if hit:
+                meta = tools.AGENT_MODES[hit]
                 arg = message.strip().split(None, 1)[1].strip().lower() if len(message.split()) > 1 else ""
                 if arg in ("off", "stop", "normal"):
-                    set_caveman(False)
-                    self._send(200, {"target": target, "reply": "Caveman mode **off** — normal replies.", "ran": []})
+                    set_mode(hit, False)
+                    reply = f"{meta['label']} mode **off**."
                 else:
-                    st = set_caveman(True, arg or caveman_state()["level"])
-                    self._send(200, {"target": target,
-                                     "reply": f"🗿 Caveman mode **on** · level **{st['level']}**. "
-                                     f"Every agent now replies terse. `/caveman off` to stop.", "ran": []})
+                    st = set_mode(hit, True, arg or modes_state()[hit]["level"])
+                    reply = (f"{meta['icon']} {meta['label']} mode **on** · level "
+                             f"**{st[hit]['level']}** — {meta['blurb']}. `/{hit} off` to stop.")
+                self._send(200, {"target": target, "reply": reply, "ran": []})
                 return
             # Inline fabric: /p <pattern> <text>  or  /pattern <name> <text>
             if cmd.startswith(("/p ", "/pattern ")):
@@ -1265,9 +1351,34 @@ class Handler(BaseHTTPRequestHandler):
             out = run_fabric(payload.get("pattern", "summarize"), payload.get("input", ""),
                              target=payload.get("target", "brain"))
             self._send(200, {"pattern": payload.get("pattern"), "output": out})
-        elif self.path == "/api/caveman":
-            st = set_caveman(payload.get("enabled", False), payload.get("level", "full"))
-            self._send(200, st)
+        elif self.path == "/api/modes":
+            st = set_mode(payload.get("mode", ""), payload.get("enabled", False),
+                          payload.get("level", "full"))
+            self._send(200, {"state": st})
+        elif self.path == "/api/updates":
+            op = payload.get("op", "scan")
+            if op == "scan":
+                # Manual scan never auto-applies — you asked to look, not to change.
+                self._send(200, {"pending": scan_updates(auto=False)})
+            elif op == "apply":
+                name = payload.get("project", "")
+                res = updates.apply(name, health_url=_health_url_for(name),
+                                    log=lambda m: _log_event("update", name, m))
+                if res.get("ok"):
+                    tools._FAB_CACHE = None
+                    _save_json(PENDING_FILE, [u for u in pending_updates() if u["name"] != name])
+                brain.audit("hub", "update.apply", f"{name}: {res}")
+                self._send(200, res)
+            elif op == "rollback":
+                res = updates.rollback(payload.get("project", ""))
+                brain.audit("hub", "update.rollback", str(res))
+                self._send(200, res)
+            elif op == "skip":
+                name = payload.get("project", "")
+                _save_json(PENDING_FILE, [u for u in pending_updates() if u["name"] != name])
+                self._send(200, {"ok": True})
+            else:
+                self._send(400, {"error": "unknown op"})
         elif self.path == "/api/tasks":
             op = payload.get("op", "add")
             if op == "add":
@@ -1423,6 +1534,7 @@ def main():
 
     threading.Thread(target=_taskbrain_loop, daemon=True).start()  # cron + intervals + CLI
     threading.Thread(target=_watchdog_loop, daemon=True).start()   # auto-heal downed agents
+    threading.Thread(target=_updates_loop, daemon=True).start()    # agent-supervised updates
     resume_flows()                                                 # durable TaskFlow recovery
 
     # Bind all interfaces by default so the Windows browser can reach it over WSL.
