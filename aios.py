@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -2051,8 +2052,77 @@ def _print_urls(cfg):
 # --------------------------------------------------------------------------- #
 # CLI                                                                          #
 # --------------------------------------------------------------------------- #
+# Commands grouped for the help screen — argparse's flat alphabetical dump is
+# unreadable once you have 25 subcommands.
+HELP_GROUPS = [
+    ("Get started", ["setup", "start", "stop", "restart", "status", "url"]),
+    ("Everyday", ["logs", "doctor", "exec", "channels", "profile", "token"]),
+    ("Agents & updates", ["updates", "update", "claude-login", "attach", "migrate", "wire"]),
+    ("Advanced", ["test", "debug", "autostart", "install-cli", "bootstrap"]),
+]
+TAGLINE = "Eight open-source AI projects. One operating system."
+
+
+class AiosParser(argparse.ArgumentParser):
+    """Colourful grouped help, and 'did you mean …?' instead of a wall of choices."""
+
+    def format_help(self):
+        if self.prog != "aios":
+            return super().format_help()
+        # `add_parser(name, help=…)` stores the text on the subparsers action's
+        # pseudo-actions, not on the returned subparser — read it from there.
+        choices, helps = {}, {}
+        for a in (self._subparsers._group_actions if self._subparsers else []):
+            choices.update(getattr(a, "_name_parser_map", {}))
+            for ca in getattr(a, "_choices_actions", []):
+                helps[ca.dest] = ca.help or ""
+        L = []
+        L.append("")
+        L.append(f"  {C.B}{C.CYN}The AI OS{C.R}  {C.GRY}·{C.R}  {C.GRY}{TAGLINE}{C.R}")
+        L.append("")
+        L.append(f"  {C.GRY}usage:{C.R} {C.B}aios{C.R} {C.GRY}<command> [options]{C.R}")
+        L.append("")
+        seen = set()
+        for title, names in HELP_GROUPS:
+            rows = [(n, choices[n]) for n in names if n in choices]
+            if not rows:
+                continue
+            L.append(f"  {C.B}{title}{C.R}")
+            for n, _sp in rows:
+                seen.add(n)
+                L.append(f"    {C.CYN}{n:<15}{C.R}{C.GRY}{helps.get(n, '')[:64]}{C.R}")
+            L.append("")
+        extra = [n for n in choices if n not in seen]
+        if extra:
+            L.append(f"  {C.B}Other{C.R}")
+            for n in sorted(extra):
+                L.append(f"    {C.CYN}{n:<15}{C.R}")
+            L.append("")
+        L.append(f"  {C.GRY}aios <command> --help for details  ·  docs: "
+                 f"https://github.com/ZDStudios/AIOS{C.R}")
+        L.append("")
+        return "\n".join(L)
+
+    def error(self, message):
+        import difflib
+        m = re.search(r"invalid choice: '([^']+)'", message or "")
+        if m and self.prog == "aios":
+            bad = m.group(1)
+            names = []
+            for a in (self._subparsers._group_actions if self._subparsers else []):
+                names += list(getattr(a, "_name_parser_map", {}))
+            near = difflib.get_close_matches(bad, names, n=3, cutoff=0.55)
+            say(f"\n  {C.RED}✗{C.R} {C.B}{bad}{C.R} isn't an aios command.")
+            if near:
+                say(f"  {C.GRY}Did you mean{C.R} " +
+                    f"{C.GRY},{C.R} ".join(f"{C.CYN}{C.B}{n}{C.R}" for n in near) + "?")
+            say(f"  {C.GRY}Run{C.R} {C.B}aios{C.R} {C.GRY}to see every command.{C.R}\n")
+            sys.exit(2)
+        super().error(message)
+
+
 def build_parser():
-    p = argparse.ArgumentParser(prog="aios", description="The AI OS — one control surface for five agent projects")
+    p = AiosParser(prog="aios", description=f"The AI OS — {TAGLINE}")
     sub = p.add_subparsers(dest="cmd")
 
     s = sub.add_parser("setup", help="install toolchains+deps, create .env/config, render + wire")

@@ -12,8 +12,10 @@ Started by `aios start hub`. Config comes from the environment (aios injects it)
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -446,6 +448,17 @@ def brain_system_prompt(message: str) -> str:
              "OpenUI-style generative UI (https://www.openui.com).")
     if tools.full_control():
         sysp += TOOL_PROTOCOL
+        sysp += (
+            "\n\nRESTYLING THIS DASHBOARD: if the user asks to change how the Control Room "
+            f"looks — colours, text size, spacing/density, which sidebar items show, or adding "
+            f"a live panel — do it through the hub API, NEVER by editing docs/dashboard.html "
+            f"(editing the file can break the UI; the API cannot, and `reset` undoes it).\n"
+            f"  RUN: curl -s http://127.0.0.1:{PORT}/api/dashboard\n"
+            f"  RUN: curl -s -X POST http://127.0.0.1:{PORT}/api/dashboard -H 'Content-Type: application/json' "
+            "-d '{\"op\":\"set\",\"vars\":{\"--accent\":\"#4f9dff\"},\"scale\":1.1,\"density\":\"compact\"}'\n"
+            "Ops: set (vars/css/scale/density) · nav (hidden/order) · panel (add/del/clear, "
+            "slot top|chat|sidebar, self-contained HTML styled with var(--accent) etc.) · "
+            "reset (what: all|vars|css|panels|nav). Full reference: the `dashboard-designer` skill.")
     sysp += active_recall(message)      # Active Memory: relevant context, every turn
     sysp += modes_prompt_suffix()       # caveman / ponytail overlays when toggled on
     return sysp
@@ -693,6 +706,111 @@ def _watchdog_loop():
 # --------------------------------------------------------------------------- #
 # Claude login from the dashboard (interactive CLI session over HTTP)          #
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Live dashboard customization — agents restyle the Control Room through an API, #
+# never by editing dashboard.html. Overrides live server-side in one JSON doc    #
+# the page applies on top of the active theme, so a bad instruction is undone    #
+# with `reset` instead of a broken file. Panels are OpenUI: arbitrary agent HTML #
+# rendered in the same sandboxed iframes the chat/canvas widgets use.            #
+# --------------------------------------------------------------------------- #
+DASH_FILE = ROOT / ".aios" / "dashboard.json"
+DASH_DEFAULT = {"vars": {}, "css": "", "scale": 1.0, "density": "normal",
+                "nav": {"hidden": [], "order": []}, "panels": [], "updated": 0}
+DASH_SLOTS = ["top", "chat", "sidebar"]
+
+_VAR_OK = re.compile(r"^--[A-Za-z0-9_-]{1,40}$")
+# CSS can't execute script in a <style>, but it CAN beacon out via url(http…) and
+# @import. Agents already own the machine, so this isn't a privilege boundary —
+# it's to stop a careless instruction from silently phoning home.
+_CSS_BAD = re.compile(r"</\s*style|@import|url\(\s*['\"]?\s*(https?:|//)", re.I)
+
+
+def dashboard_cfg() -> dict:
+    # deepcopy, not {**DASH_DEFAULT}: a shallow copy shares the nested `vars`/`nav`
+    # dicts with the module-level default, so writing a var would mutate the
+    # defaults themselves and `reset` would restore the very values it should clear.
+    cfg = copy.deepcopy(DASH_DEFAULT)
+    cfg.update(_load_json(DASH_FILE, {}))
+    for k, v in DASH_DEFAULT.items():  # heal older/partial files
+        cfg.setdefault(k, copy.deepcopy(v))
+    return cfg
+
+
+def _clean_var(k: str, v) -> tuple[str, str] | None:
+    k = str(k).strip()
+    if not k.startswith("--"):
+        k = "--" + k.lstrip("-")
+    if not _VAR_OK.match(k):
+        return None
+    val = str(v).strip()
+    # A value containing } or < would break out of the rule we inject it into.
+    if not val or len(val) > 200 or any(c in val for c in "}<>;{"):
+        return None
+    return k, val
+
+
+def dashboard_update(payload: dict) -> dict:
+    cfg = dashboard_cfg()
+    op = (payload.get("op") or "set").lower()
+    rejected = []
+
+    if op == "reset":
+        what = payload.get("what", "all")
+        if what == "all":
+            cfg = copy.deepcopy(DASH_DEFAULT)
+        else:
+            cfg[what] = copy.deepcopy(DASH_DEFAULT.get(what, ""))
+    elif op == "set":
+        for k, v in (payload.get("vars") or {}).items():
+            cleaned = _clean_var(k, v)
+            if cleaned:
+                cfg["vars"][cleaned[0]] = cleaned[1]
+            else:
+                rejected.append(str(k))
+        if "css" in payload:
+            css = str(payload["css"] or "")[:20000]
+            if _CSS_BAD.search(css):
+                rejected.append("css (contains @import, remote url(), or </style>)")
+            else:
+                cfg["css"] = css
+        if "scale" in payload:
+            try:
+                cfg["scale"] = max(0.7, min(1.6, float(payload["scale"])))
+            except (TypeError, ValueError):
+                rejected.append("scale")
+        if payload.get("density") in ("normal", "compact", "comfortable"):
+            cfg["density"] = payload["density"]
+    elif op == "nav":
+        if isinstance(payload.get("hidden"), list):
+            cfg["nav"]["hidden"] = [str(x)[:40] for x in payload["hidden"]][:40]
+        if isinstance(payload.get("order"), list):
+            cfg["nav"]["order"] = [str(x)[:40] for x in payload["order"]][:40]
+    elif op == "panel":
+        act = (payload.get("action") or "add").lower()
+        if act == "add":
+            pid = payload.get("id") or f"p{int(time.time() * 1000) % 10**9}"
+            panel = {"id": str(pid)[:40],
+                     "title": str(payload.get("title", "panel"))[:80],
+                     "html": str(payload.get("html", ""))[:200000],
+                     "slot": payload.get("slot") if payload.get("slot") in DASH_SLOTS else "top",
+                     "height": max(60, min(1200, int(payload.get("height", 220) or 220))),
+                     "by": str(payload.get("by", "agent"))[:40]}
+            cfg["panels"] = [p for p in cfg["panels"] if p["id"] != panel["id"]] + [panel]
+            cfg["panels"] = cfg["panels"][-24:]
+        elif act in ("del", "delete", "remove"):
+            cfg["panels"] = [p for p in cfg["panels"] if p["id"] != str(payload.get("id"))]
+        elif act == "clear":
+            cfg["panels"] = []
+    else:
+        return {"ok": False, "error": f"unknown op '{op}'", "config": cfg}
+
+    cfg["updated"] = time.time()
+    _save_json(DASH_FILE, cfg)
+    brain.audit(payload.get("by", "agent"), "dashboard." + op,
+                json.dumps({k: v for k, v in payload.items() if k != "html"})[:400])
+    return {"ok": True, "config": cfg, "rejected": rejected}
+
+
 # --------------------------------------------------------------------------- #
 # Supervised updates — watch every bundled project's upstream, have an AGENT     #
 # review what changed, then apply only what's safe (and roll back if the         #
@@ -1165,6 +1283,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"patterns": tools.fabric_patterns(), "bin": bool(tools.fabric_bin())})
         elif self.path == "/api/modes":
             self._send(200, {"state": modes_state(), "modes": tools.agent_modes_meta()})
+        elif self.path == "/api/dashboard":
+            self._send(200, dashboard_cfg())
         elif self.path == "/api/updates":
             self._send(200, {"pending": pending_updates(), "pins": updates.pins(),
                              "reports": updates.reports()[:20],
@@ -1355,6 +1475,8 @@ class Handler(BaseHTTPRequestHandler):
             st = set_mode(payload.get("mode", ""), payload.get("enabled", False),
                           payload.get("level", "full"))
             self._send(200, {"state": st})
+        elif self.path == "/api/dashboard":
+            self._send(200, dashboard_update(payload))
         elif self.path == "/api/updates":
             op = payload.get("op", "scan")
             if op == "scan":

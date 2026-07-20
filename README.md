@@ -2,7 +2,7 @@
 
 # 🧠 The AI OS
 
-### Five open-source AI agents. One operating system. One Control Room.
+### Eight open-source AI projects. One operating system. One Control Room.
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-8B5CF6?style=for-the-badge" alt="MIT License"></a>
@@ -20,6 +20,9 @@
   <img src="https://img.shields.io/badge/LifeOS-shared_skills-8B5CF6?style=flat-square" alt="LifeOS">
   <img src="https://img.shields.io/badge/+_openclaw--os-dashboard-64748B?style=flat-square" alt="openclaw-os">
   <img src="https://img.shields.io/badge/+_OpenUI-generative_UI-10B981?style=flat-square" alt="OpenUI">
+  <img src="https://img.shields.io/badge/+_Fabric-255_patterns-0EA5E9?style=flat-square" alt="Fabric">
+  <img src="https://img.shields.io/badge/+_Caveman-say_less-A16207?style=flat-square" alt="Caveman">
+  <img src="https://img.shields.io/badge/+_Ponytail-build_less-DB2777?style=flat-square" alt="Ponytail">
 </p>
 
 **[Install](#-install-one-line)** · **[Control Room](#-the-control-room)** · **[Architecture](#️-architecture)** · **[Commands](#️-command-reference)** · **[Full docs](README.aios.md)** · **[Website](https://zdstudios.github.io/AIOS/)**
@@ -28,7 +31,7 @@
 
 ---
 
-**The AI OS** takes five independent open-source AI agents and makes them work as **one auto-configured
+**The AI OS** takes eight independent open-source AI projects and makes them work as **one auto-configured
 system** you drive from a single command — **`aios`** — and a single web **Control Room** where you can
 **talk to everything and have the agents talk to each other**.
 
@@ -38,7 +41,7 @@ together, mounts your shared skills, and adds **OpenUI** generative-UI context t
 
 > You can't fuse three runtimes and multiple package managers into a single file — that would just break
 > everything. So "one file" here means **one control surface** (`aios`) + **one dashboard** (the Hub) over
-> five real, unmodified projects. It installs, configures, wires, runs, tests, and debugs all of them.
+> eight real, unmodified projects. It installs, configures, wires, runs, tests, and debugs all of them.
 
 <div align="center">
 
@@ -92,7 +95,7 @@ aios url                 # open the Control Room
 - **Render generative UI (OpenUI) in the hub** — any agent can emit a ```ui``` block (self-contained HTML) that the hub renders **live and interactive** in chat (sandboxed, theme-aware). openclaw-os also renders OpenUI Lang natively.
 - **Shared Canvas any agent can edit** — agents `POST /api/ui` (CrewAI has a `build_dashboard_ui` tool) to pin widgets to a **Canvas** everyone sees. This is how "all agents edit the dashboard."
 
-## 🧩 The five agents
+## 🧩 The agents
 
 | Agent | Role in The AI OS | Port | Upstream |
 |---|---|---|---|
@@ -237,12 +240,35 @@ That is deliberately the "ambient authority" posture that made **OpenClaw's CVE-
 
 **Active Memory:** a memory sub-agent runs on **every** turn — recall is a free FTS5 query, fact-extraction is one small async call — so the agents actually learn your workflow over time instead of only reading memory at session start (`memory.active`).
 
-## 🧵 Fabric patterns & 🗿 Caveman mode
+## 🎨 Agents can redesign the dashboard (safely)
 
-Two more open-source projects, wired in at the prompt level (no extra service to run):
+Ask in chat — *"make the accent blue and the text bigger"*, *"hide Automations"*, *"put a
+deploy-status panel on the dashboard"* — and the agents do it **through the hub API, never by
+editing `dashboard.html`**. That's the point: styling lives in one server-side JSON document
+the page applies on top of your theme, so an agent can't break the UI by writing bad code, and
+**one Reset undoes everything** (Settings → *Agent-applied appearance*).
+
+| What they can change | How |
+|---|---|
+| Colours | any theme CSS variable — `--accent`, `--bg`, `--text`, `--border`… |
+| Text size / density | `scale` 0.7–1.6, `density` compact \| normal \| comfortable |
+| Custom CSS | appended last, for anything variables can't express |
+| Sidebar | hide or reorder any nav item |
+| **OpenUI panels** | self-contained agent HTML in sandboxed iframes, in the `top`, `chat` or `sidebar` slot |
+
+Changes appear within ~4s, survive a theme switch, and are audited. Hostile or careless input is
+refused, not applied: variable values containing `{ } < > ;`, malformed keys, and CSS with
+`@import`, `</style>` or a remote `url(http…)` (which could beacon out) are rejected and reported
+back. The agents learn this from the bundled **`dashboard-designer`** skill, and the endpoint is
+`GET`/`POST /api/dashboard` (ops: `set` · `nav` · `panel` · `reset`).
+
+## 🧵 Fabric patterns · 🗿 Caveman · 🎀 Ponytail
+
+Three more open-source projects, wired in at the prompt level (no extra service to run):
 
 - **[Fabric](https://github.com/danielmiessler/fabric) — 255 patterns.** Fabric's "patterns" are curated system-prompts (`summarize`, `extract_wisdom`, `analyze_claims`, `write_essay`, `create_quiz`…). AIOS reads them straight from `data/patterns/` and runs them **on your configured model** — including your Claude subscription — so there's no Go binary to install. Use them in the **Patterns** view (pick → paste → run) or inline in chat: `/p summarize <text>`. The `fabric` chat target also works: `fabric` with a message `pattern: your text`.
 - **[Caveman](https://github.com/JuliusBrussee/caveman) — conciseness mode.** A system-prompt overlay that makes every agent ~65% terser while keeping code, commands, and error strings exact. Toggle the **🗿 Caveman** button in the composer (cycles off → lite → full → ultra → wenyan), or type `/caveman [level]` / `/caveman off` in chat. It's also mounted as a skill into opencode/hermes/openclaw, so they respect it too. Levels come straight from Caveman's own SKILL.md.
+- **[Ponytail](https://github.com/DietrichGebert/ponytail) — build-less mode.** The same idea applied to *code* instead of prose: a "laziness ladder" that forces the simplest thing that works (~54% less code, YAGNI enforced, stdlib before dependencies). Toggle **🎀 Ponytail** in the composer or `/ponytail [lite|full|ultra]`. Caveman trims what an agent **says**; Ponytail trims what it **builds** — they compose, so you can run both.
 
 **On WSL?** `127.0.0.1:8787` often won't reach WSL from your Windows browser (localhost-forwarding is flaky). `aios start`/`aios url` now print your **WSL IP** URL — use that (e.g. `http://172.31.x.x:8787/`). The hub binds `0.0.0.0` so the WSL IP always works.
 

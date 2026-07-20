@@ -175,6 +175,11 @@
   .chan input{width:100%;font-size:.8rem}
   .chan-note{color:var(--text3);font-size:.74rem}
   .logbox{background:var(--sunk);border:1px solid var(--border);border-radius:9px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;white-space:pre-wrap;max-height:340px;overflow:auto;color:var(--text2)}
+  .panelslot{display:flex;flex-direction:column;gap:10px}
+  .panelslot:empty{display:none}
+  #slot-top:not(:empty){padding:12px 20px 0}
+  #slot-sidebar:not(:empty){padding:10px}
+  #slot-chat:not(:empty){padding:8px 0}
   .patlist{max-height:62vh;overflow:auto;border:1px solid var(--border);border-radius:10px}
   .patrow{padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;flex-direction:column;gap:2px}
   .patrow:last-child{border-bottom:0}
@@ -223,9 +228,12 @@
     <button class="nav" data-v="updates" onclick="nav('updates')"><span class="ic">⬆️</span> Updates</button>
     <button class="nav" data-v="security" onclick="nav('security')"><span class="ic">🛡️</span> Control &amp; Audit</button>
     <button class="nav" data-v="settings" onclick="nav('settings')"><span class="ic">⚙️</span> Settings</button>
+    <div id="slot-sidebar" class="panelslot"></div>
   </aside>
 
   <div class="content">
+    <!-- agent-built OpenUI panels (slot: top) — filled live via /api/dashboard -->
+    <div id="slot-top" class="panelslot"></div>
     <!-- CHAT (3-column) -->
     <div id="chat" class="view active chat3">
       <div class="convs">
@@ -249,6 +257,7 @@
             <button class="chip" data-t="fabric" title="Run a Fabric pattern (type: pattern: your text)">🧵 Fabric</button>
             <button class="chip" data-t="all">🌐 All</button>
           </div>
+          <div id="slot-chat" class="panelslot"></div>
           <div class="inrow">
             <button class="mic" id="micBtn" onclick="toggleMic()" title="Voice input">🎙️</button>
             <textarea id="input" placeholder="Message The AI OS…  ( /dry to estimate cost · / for prompts · Enter to send )"></textarea>
@@ -465,6 +474,21 @@
     <div id="settings" class="view">
       <div class="vhead"><h2>⚙️ Settings</h2><span class="sub">edit once — applies to every agent</span></div>
       <div class="vbody pad" style="max-width:760px">
+        <div class="card">
+          <h3>🎨 Agent-applied appearance</h3>
+          <p>Agents can restyle this dashboard on request — colours, text size, density, which
+             sidebar items show, and live <b>OpenUI panels</b> — through the hub API, never by
+             editing code. Ask in chat: <span class="mono">make the accent blue and text bigger</span>.
+             Anything they change is undone here.</p>
+          <div id="dashState" style="margin-top:10px;color:var(--text3);font-size:12.5px"></div>
+          <div class="row" style="flex-wrap:wrap">
+            <button class="btn" onclick="resetDash('vars')">Reset colours</button>
+            <button class="btn" onclick="resetDash('css')">Reset custom CSS</button>
+            <button class="btn" onclick="resetDash('panels')">Remove panels</button>
+            <button class="btn" onclick="resetDash('nav')">Restore sidebar</button>
+            <button class="btn danger" onclick="resetDash('all')">Reset everything</button>
+          </div>
+        </div>
         <div class="card" style="border-color:var(--accent-soft2)">
           <h3>🔗 Connect your Claude account (Pro / Max)</h3>
           <p>Use your Claude subscription for the Brain, Team and crews — routed through <b>claude-code</b>,
@@ -581,7 +605,7 @@
   };
   function customThemes(){try{return JSON.parse(localStorage.aiosCustomThemes||'{}')}catch(e){return{}}}
   function allThemes(){return Object.assign({},THEMES,customThemes());}
-  function applyTheme(name){const th=allThemes();const t=th[name]||th.hermes;rootEl.style.colorScheme=t.dark?'dark':'light';Object.entries(t.vars).forEach(([k,v])=>rootEl.style.setProperty(k,v));localStorage.aiosTheme=(th[name]?name:'hermes');const s=document.getElementById('themeSel');if(s)s.value=localStorage.aiosTheme;try{renderThemeStore();}catch(e){}}
+  function applyTheme(name){const th=allThemes();const t=th[name]||th.hermes;rootEl.style.colorScheme=t.dark?'dark':'light';Object.entries(t.vars).forEach(([k,v])=>rootEl.style.setProperty(k,v));localStorage.aiosTheme=(th[name]?name:'hermes');const s=document.getElementById('themeSel');if(s)s.value=localStorage.aiosTheme;try{renderThemeStore();}catch(e){}try{if(DASHCFG)applyDashCfg(DASHCFG);}catch(e){}}
   function renderThemeSelect(){const s=document.getElementById('themeSel');if(!s)return;s.innerHTML=Object.entries(allThemes()).map(([k,t])=>`<option value="${k}">${t.label}</option>`).join('');s.value=localStorage.aiosTheme||'hermes';}
   function renderThemeStore(){const g=document.getElementById('themeGrid');if(!g)return;const th=allThemes(),cur=localStorage.aiosTheme;
     g.innerHTML=Object.entries(th).map(([k,t])=>{const v=t.vars;return `<div onclick="applyTheme('${k}')" title="${t.label}" style="cursor:pointer;border:2px solid ${k===cur?v['--accent']:'var(--border)'};border-radius:10px;overflow:hidden">
@@ -616,7 +640,7 @@
     if(v==='patterns')loadPatterns();
     if(v==='updates')loadUpdates();
     if(v==='security'){loadSecurity();loadAudit();}
-    if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();loadClaudeStatus();}
+    if(v==='settings'){loadSettings();loadSysPrompt();loadModels();renderThemeStore();loadClaudeStatus();try{renderDashState();}catch(e){}}
   }
   function frame(fid,linkId,url){if(!url)return;const f=document.getElementById(fid);document.getElementById(linkId).href=url;if(!f.dataset.loaded){f.src=url;f.dataset.loaded='1';}}
   function agentPanel(key,bodyId,desc,url,external){
@@ -814,6 +838,60 @@
   function pickPattern(name){patSel=name;const p=PATTERNS.find(x=>x.name===name)||{};document.getElementById('patTitle').textContent=name;document.getElementById('patDesc').textContent=p.description||'';document.getElementById('patRun').disabled=false;renderPatterns();}
   async function runPattern(){if(!patSel)return;const input=document.getElementById('patInput').value.trim();if(!input){toast('Paste some text first');return;}const btn=document.getElementById('patRun');btn.disabled=true;btn.textContent='Running…';const out=document.getElementById('patOut');out.innerHTML='<span class="spin"></span>';try{const r=await api('/api/fabric',{pattern:patSel,input,target});out.innerHTML=mdRender(r.output||'(no output)');}catch(e){out.textContent='Error: '+e;}btn.disabled=false;btn.textContent='Run pattern';}
 
+  // ── Live dashboard customization (agents drive this via /api/dashboard) ──
+  // Overrides are applied ON TOP of the active theme and re-applied whenever the
+  // theme changes, so an agent's tweaks survive a theme switch.
+  let DASHCFG=null, dashSig='', dashVarKeys=[];
+  function applyDashCfg(cfg){
+    DASHCFG=cfg||{};
+    // applyTheme() sets the same variables as INLINE styles on :root, and inline
+    // beats any stylesheet — so overrides must be set the same way, after it.
+    dashVarKeys.forEach(k=>{if(!(DASHCFG.vars||{})[k])rootEl.style.removeProperty(k);});
+    dashVarKeys=Object.keys(DASHCFG.vars||{});
+    Object.entries(DASHCFG.vars||{}).forEach(([k,v])=>rootEl.style.setProperty(k,v));
+    let st=document.getElementById('aiosCustomVars');
+    if(!st){st=document.createElement('style');st.id='aiosCustomVars';document.head.appendChild(st);}
+    const scale=DASHCFG.scale||1, dens=DASHCFG.density||'normal';
+    const pad=dens==='compact'?'.72':(dens==='comfortable'?'1.25':'1');
+    st.textContent=`html{font-size:${(scale*100).toFixed(1)}%}
+      .card{padding:calc(18px*${pad})} .memrow{padding:calc(10px*${pad}) calc(12px*${pad})}
+      .nav{padding:calc(9px*${pad}) 12px}`;
+    let cs=document.getElementById('aiosCustomCss');
+    if(!cs){cs=document.createElement('style');cs.id='aiosCustomCss';document.head.appendChild(cs);}
+    cs.textContent=DASHCFG.css||'';
+    // nav visibility + order
+    const hidden=new Set((DASHCFG.nav||{}).hidden||[]);
+    document.querySelectorAll('.nav[data-v]').forEach(b=>{b.style.display=hidden.has(b.dataset.v)?'none':'';});
+    const order=(DASHCFG.nav||{}).order||[];
+    if(order.length){order.slice().reverse().forEach(v=>{const b=document.querySelector(`.nav[data-v="${CSS.escape(v)}"]`);if(b&&b.parentNode)b.parentNode.insertBefore(b,b.parentNode.firstChild);});}
+    renderDashPanels();try{renderDashState();}catch(e){}
+  }
+  function renderDashPanels(){
+    const panels=(DASHCFG||{}).panels||[];
+    ['top','chat','sidebar'].forEach(slot=>{
+      const host=document.getElementById('slot-'+slot); if(!host)return;
+      const mine=panels.filter(p=>p.slot===slot);
+      host.innerHTML='';
+      mine.forEach(p=>{
+        const w=document.createElement('div');w.className='widget';
+        w.innerHTML=`<div class="wh">🧩 ${esc(p.title||'panel')} <span class="by">by ${esc(p.by||'agent')}</span><button class="btn sm danger" style="margin-left:auto" onclick="delDashPanel('${esc(p.id)}')">✕</button></div>`;
+        const f=widgetFrame(p.html||'');f.style.height=(p.height||220)+'px';
+        w.appendChild(f);host.appendChild(w);
+      });
+    });
+  }
+  async function loadDashCfg(force){try{const c=await(await fetch('/api/dashboard')).json();
+    const sig=JSON.stringify([c.updated,c.vars,c.css,c.scale,c.density,c.nav,(c.panels||[]).map(p=>p.id+p.height)]);
+    if(force||sig!==dashSig){dashSig=sig;applyDashCfg(c);} }catch(e){}}
+  async function delDashPanel(id){await api('/api/dashboard',{op:'panel',action:'del',id});loadDashCfg(true);}
+  function renderDashState(){const el=document.getElementById('dashState');if(!el)return;const c=DASHCFG||{};
+    const n=Object.keys(c.vars||{}).length, p=(c.panels||[]).length, h=((c.nav||{}).hidden||[]).length;
+    el.innerHTML=(n||p||h||c.css||(c.scale&&c.scale!==1)||(c.density&&c.density!=='normal'))
+      ? `Active: ${n} colour override(s) · scale ${c.scale||1} · ${c.density||'normal'} density · ${p} panel(s) · ${h} hidden nav item(s)`
+      : 'No agent changes active — showing the theme as-is.';}
+  async function resetDash(what){if(!confirm('Reset the dashboard '+(what==='all'?'appearance and panels':what)+' to defaults?'))return;
+    await api('/api/dashboard',{op:'reset',what:what||'all'});loadDashCfg(true);toast('Dashboard reset');}
+
   // ── Supervised updates ──
   const VCOL={SAFE:'up',RISKY:'',BLOCK:'down'};
   async function loadUpdates(){try{const r=await(await fetch('/api/updates')).json();renderUpdates(r);}catch(e){document.getElementById('updList').innerHTML='<p style="color:var(--text3)">Updates unavailable.</p>';}}
@@ -1001,7 +1079,7 @@
     }catch(e){}
   }
   refresh();setInterval(refresh,5000);
-  renderConvs();renderMsgs();loadPrompts();refreshUsage();loadModes();
+  renderConvs();renderMsgs();loadPrompts();refreshUsage();loadModes();loadDashCfg(true);setInterval(loadDashCfg,4000);
   if(innerWidth<=760)document.getElementById('menuBtn').style.display='grid';
 </script>
 </body>
