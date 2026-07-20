@@ -82,7 +82,7 @@
   .msg .bubble li{margin:2px 0}
   .msg .bubble pre{background:var(--sunk);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:.82rem;overflow-x:auto;margin:8px 0;white-space:pre-wrap;line-height:1.5}
   .msg .bubble b{color:var(--text)}
-  .uiframe{width:100%;height:300px;border:1px solid var(--border-strong);border-radius:10px;background:var(--bg);margin:10px 0;display:block;resize:vertical;overflow:auto}
+  .uiframe{width:100%;height:320px;max-height:80vh;border:1px solid var(--border-strong);border-radius:10px;background:var(--bg);margin:10px 0;display:block;resize:vertical;overflow:auto}
   .canvas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:14px}
   .widget{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--elevated);box-shadow:var(--shadow)}
   .widget .wh{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:.82rem;font-weight:600}
@@ -175,6 +175,18 @@
   .chan input{width:100%;font-size:.8rem}
   .chan-note{color:var(--text3);font-size:.74rem}
   .logbox{background:var(--sunk);border:1px solid var(--border);border-radius:9px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;white-space:pre-wrap;max-height:340px;overflow:auto;color:var(--text2)}
+  .actfeed{display:flex;flex-direction:column;gap:5px;font-size:.82rem}
+  .actline{display:flex;gap:8px;align-items:flex-start;color:var(--text2);line-height:1.45}
+  .actline .ai{flex:0 0 auto;width:16px;text-align:center}
+  .actline.cmd{color:var(--text);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem}
+  .actline.bad{color:var(--danger)}
+  .actdet{margin:0 0 2px 24px;padding:7px 9px;background:var(--sunk);border:1px solid var(--border);
+    border-radius:7px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.72rem;
+    color:var(--text3);white-space:pre-wrap;max-height:150px;overflow:auto}
+  .acttrace{margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+  .acttrace summary{cursor:pointer;color:var(--text3);font-size:.76rem;list-style:none}
+  .acttrace summary:hover{color:var(--accent-strong)}
+  .acttrace .actfeed{margin-top:8px}
   .panelslot{display:flex;flex-direction:column;gap:10px}
   .panelslot:empty{display:none}
   #slot-top:not(:empty){padding:12px 20px 0}
@@ -667,13 +679,20 @@
   input.addEventListener('input',()=>{input.style.height='44px';input.style.height=Math.min(input.scrollHeight,150)+'px';});
   function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   // OpenUI: render a self-contained HTML doc as a sandboxed, theme-aware iframe
+  let __uidSeq=0;
   function renderUI(code){
+    const uid=++__uidSeq;
     const cs=getComputedStyle(document.documentElement);
     const vars=['--bg','--surface','--elevated','--sunk','--sunk2','--text','--text2','--text3','--accent','--accent-strong','--border','--border-strong','--danger','--success'].map(v=>v+':'+cs.getPropertyValue(v)).join(';');
-    const doc=`<!doctype html><html><head><meta charset="utf8"><style>:root{${vars}}*{box-sizing:border-box}body{margin:0;padding:12px;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}button{background:var(--accent);color:#1a1408;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}input,select,textarea{background:var(--elevated);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;padding:8px}table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--border);padding:6px 10px;text-align:left}</style></head><body>${code}</body></html>`;
+    const doc=`<!doctype html><html><head><meta charset="utf8"><style>:root{${vars}}*{box-sizing:border-box}body{margin:0;padding:12px;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}button{background:var(--accent);color:#1a1408;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}input,select,textarea{background:var(--elevated);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;padding:8px}table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--border);padding:6px 10px;text-align:left}</style></head><body>${code}<script>(function(){var id=${uid};function send(){try{var h=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);parent.postMessage({__aiosFrame:id,h:h},'*');}catch(e){}}addEventListener('load',send);addEventListener('resize',send);setTimeout(send,60);setTimeout(send,400);setTimeout(send,1200);if(window.ResizeObserver){new ResizeObserver(send).observe(document.body);}})();<\/script></body></html>`;
     const src=doc.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-    return `<iframe class="uiframe" sandbox="allow-scripts allow-forms allow-popups" srcdoc="${src}"></iframe>`;
+    return `<iframe class="uiframe" data-uid="${uid}" sandbox="allow-scripts allow-forms allow-popups" srcdoc="${src}"></iframe>`;
   }
+  addEventListener('message',function(ev){
+    const d=ev&&ev.data; if(!d||typeof d!=='object'||!d.__aiosFrame)return;
+    const f=document.querySelector('iframe[data-uid="'+d.__aiosFrame+'"]');
+    if(f&&d.h){f.style.height=Math.min(Math.max(d.h+24,180),Math.round(innerHeight*0.8))+'px';}
+  });
   function mdRender(t){
     t=t||'';const ui=[];
     t=t.replace(/```(?:ui|html|openui)\s*\n([\s\S]*?)```/gi,(m,c)=>{ui.push(c);return '@@UIB'+(ui.length-1)+'@@';});
@@ -734,6 +753,50 @@
     }catch(e){h.querySelector('.bubble').textContent='Dry run failed: '+e;}
     box.scrollTop=1e9;
   }
+  // ── Live activity: what the agent is thinking + doing, while it happens ──
+  let actTimer=null, actSince=0, actEvents=[], actHost=null, actStopped=true;
+  const ACT_ICON={thinking:'🧠',run:'⚡',result:'📄',blocked:'⛔',agent:'🤝',delegate:'📤',
+                  canvas:'📌',note:'💬',done:'✅'};
+  function startActivity(turn,holder,box){
+    stopActivity(); actSince=0; actEvents=[]; actHost=holder; actStopped=false;
+    const bub=holder.querySelector('.bubble');
+    bub.innerHTML='<div class="actfeed"><div class="actline"><span class="spin"></span> Working…</div></div>';
+    const tick=async()=>{
+      try{
+        const r=await(await fetch('/api/activity?turn='+encodeURIComponent(turn)+'&since='+actSince)).json();
+        if(actStopped)return;   // reply already landed — never repaint over it
+        if(r.events&&r.events.length){actEvents=actEvents.concat(r.events);actSince=r.n;renderActivity(bub,box);}
+      }catch(e){}
+    };
+    tick(); actTimer=setInterval(tick,700);
+  }
+  function renderActivity(bub,box){
+    const near=box?(box.scrollHeight-box.scrollTop-box.clientHeight<120):false;
+    bub.innerHTML='<div class="actfeed">'+actEvents.map(e=>{
+      const ic=ACT_ICON[e.kind]||'•';
+      const cls=e.kind==='run'?'cmd':(e.kind==='blocked'?'bad':'');
+      const det=e.detail?`<pre class="actdet">${esc(e.detail)}</pre>`:'';
+      return `<div class="actline ${cls}"><span class="ai">${ic}</span><span>${esc(e.text)}</span></div>${det}`;
+    }).join('')+'<div class="actline"><span class="spin"></span> Working…</div></div>';
+    if(near&&box)box.scrollTop=box.scrollHeight;
+  }
+  function stopActivity(){actStopped=true;if(actTimer){clearInterval(actTimer);actTimer=null;}}
+  // Once the reply lands, keep the trace available but collapsed.
+  function attachActivityLog(holder){
+    const steps=actEvents.filter(e=>e.kind!=='done'&&e.kind!=='note');
+    if(!steps.length)return;
+    const bub=holder.querySelector('.bubble');
+    const d=document.createElement('details'); d.className='acttrace';
+    d.innerHTML=`<summary>${steps.length} step${steps.length>1?'s':''} · what it did</summary>`+
+      '<div class="actfeed">'+steps.map(e=>{
+        const ic=ACT_ICON[e.kind]||'•';
+        const det=e.detail?`<pre class="actdet">${esc(e.detail)}</pre>`:'';
+        return `<div class="actline ${e.kind==='run'?'cmd':''}"><span class="ai">${ic}</span><span>${esc(e.text)}</span></div>${det}`;
+      }).join('')+'</div>';
+    bub.appendChild(d);
+    actEvents=[];
+  }
+
   async function send(){
     let text=input.value.trim();if(!text)return;
     if(/^\/dry(run)?\b/i.test(text)){input.value='';input.style.height='44px';return doDry(text.replace(/^\/dry(run)?\s*/i,''));}
@@ -745,16 +808,20 @@
     document.getElementById('send').disabled=true;
     const hist=c.msgs.filter(m=>m.role==='user'||m.role==='assistant').slice(-13,-1).map(m=>({role:m.role,content:m.content}));
     let replyText='',html='';
+    const turnId='t'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    startActivity(turnId,h,box);
     try{
       if(target==='auto'){const d=await api('/api/route_auto',{message:text,history:hist});replyText='🎯 Routed to **'+d.chosen+'**\n\n'+(d.reply||'');html=mdRender(replyText);}
       else if(target==='arena'){const d=await api('/api/arena',{message:text,targets:['brain','claudecode'],history:hist});html='<div class="arena">'+d.results.map(r=>`<div class="col"><h5>${ICON[r.target]||''} ${r.target}</h5>${mdRender(r.reply||'')}</div>`).join('')+'</div>';replyText=d.results.map(r=>`### ${r.target}\n${r.reply}`).join('\n\n');}
       else if(target==='council'){const d=await api('/api/council',{message:text,targets:['brain','crewai','claudecode'],history:hist});html=mdRender('### 🏛️ Consensus\n'+(d.consensus||''))+'<div class="arena" style="margin-top:10px">'+d.results.map(r=>`<div class="col"><h5>${r.target}</h5>${mdRender((r.reply||'').slice(0,700))}</div>`).join('')+'</div>';replyText='Consensus:\n'+(d.consensus||'');}
       else if(target==='pipeline'){const d=await api('/api/pipeline',{message:text,steps:['crewai','opencode','brain'],history:hist});html=d.steps.map((s,i)=>`<div class="col" style="margin-bottom:8px"><h5>Step ${i+1}: ${ICON[s.target]||''} ${s.target}</h5>${mdRender((s.output||'').slice(0,800))}</div>`).join('')+mdRender('### ✅ Final\n'+(d.final||''));replyText='Final:\n'+(d.final||'');}
-      else{const d=await api('/api/chat',{target,message:text,history:hist});replyText=d.reply||'(no reply)';html=mdRender(replyText);}
+      else{const d=await api('/api/chat',{target,message:text,history:hist,turn:turnId});replyText=d.reply||'(no reply)';html=mdRender(replyText);}
+      stopActivity();
       h.querySelector('.av').textContent=ICON[target]||'◆';h.querySelector('.bubble').innerHTML=html;
+      attachActivityLog(h);
       c.msgs.push({role:'assistant',content:replyText,target});saveConvs();
       if(document.getElementById('speakToggle').checked)speak(replyText);
-    }catch(e){h.querySelector('.av').textContent='⚠️';h.querySelector('.bubble').textContent='Hub unreachable: '+e;}
+    }catch(e){stopActivity();h.querySelector('.av').textContent='⚠️';h.querySelector('.bubble').textContent='Hub unreachable: '+e;}
     document.getElementById('send').disabled=false;box.scrollTop=box.scrollHeight;refreshUsage();
   }
   // voice input (Web Speech)
@@ -875,7 +942,7 @@
       mine.forEach(p=>{
         const w=document.createElement('div');w.className='widget';
         w.innerHTML=`<div class="wh">🧩 ${esc(p.title||'panel')} <span class="by">by ${esc(p.by||'agent')}</span><button class="btn sm danger" style="margin-left:auto" onclick="delDashPanel('${esc(p.id)}')">✕</button></div>`;
-        const f=widgetFrame(p.html||'');f.style.height=(p.height||220)+'px';
+        const f=widgetFrame(p.html||'');f.style.height=(p.height||220)+'px';f.removeAttribute('data-uid');
         w.appendChild(f);host.appendChild(w);
       });
     });
@@ -939,7 +1006,7 @@
   async function delPrompt(n){await api('/api/prompts',{op:'delete',name:n});loadPrompts();}
   async function refreshUsage(){try{const r=await(await fetch('/api/usage')).json();const b=document.getElementById('usageBadge');if(b)b.textContent='📊 '+(r.total||0)+' requests · '+(r.free_requests||0)+' free (subscription)';}catch(e){}}
   // canvas — generative UI any agent can edit
-  function widgetFrame(html){const cs=getComputedStyle(document.documentElement);const vars=['--bg','--surface','--elevated','--sunk','--text','--text2','--text3','--accent','--accent-strong','--border','--border-strong','--danger','--success'].map(v=>v+':'+cs.getPropertyValue(v)).join(';');const doc=`<!doctype html><html><head><meta charset="utf8"><style>:root{${vars}}*{box-sizing:border-box}body{margin:0;padding:12px;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px}button{background:var(--accent);color:#1a1408;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}input,select,textarea{background:var(--elevated);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;padding:8px}table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--border);padding:6px 10px}</style></head><body>${html}</body></html>`;const f=document.createElement('iframe');f.setAttribute('sandbox','allow-scripts allow-forms allow-popups');f.srcdoc=doc;return f;}
+  function widgetFrame(html){const uid=++__uidSeq;const cs=getComputedStyle(document.documentElement);const vars=['--bg','--surface','--elevated','--sunk','--text','--text2','--text3','--accent','--accent-strong','--border','--border-strong','--danger','--success'].map(v=>v+':'+cs.getPropertyValue(v)).join(';');const doc=`<!doctype html><html><head><meta charset="utf8"><style>:root{${vars}}*{box-sizing:border-box}body{margin:0;padding:12px;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px}button{background:var(--accent);color:#1a1408;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}input,select,textarea{background:var(--elevated);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;padding:8px}table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--border);padding:6px 10px}</style></head><body>${html}<script>(function(){var id=${uid};function send(){try{var h=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);parent.postMessage({__aiosFrame:id,h:h},'*');}catch(e){}}addEventListener('load',send);addEventListener('resize',send);setTimeout(send,60);setTimeout(send,400);setTimeout(send,1200);if(window.ResizeObserver){new ResizeObserver(send).observe(document.body);}})();<\/script></body></html>`;const f=document.createElement('iframe');f.setAttribute('sandbox','allow-scripts allow-forms allow-popups');f.setAttribute('data-uid',uid);f.srcdoc=doc;return f;}
   async function loadCanvas(){try{const r=await(await fetch('/api/ui')).json();const g=document.getElementById('canvasGrid');const ws=r.widgets||[];if(!ws.length){g.innerHTML='<p style="color:var(--text3)">No widgets yet. Add one below, or ask an agent to build UI (it can emit a ```ui block or POST /api/ui).</p>';return;}g.innerHTML='';ws.forEach(w=>{const d=document.createElement('div');d.className='widget';d.innerHTML=`<div class="wh">🧩 ${esc(w.title||'widget')} <span class="by">by ${esc(w.by||'agent')}</span><button class="btn sm danger" style="margin-left:auto" onclick="delWidget('${w.id}')">✕</button></div>`;d.appendChild(widgetFrame(w.html||''));g.appendChild(d);});}catch(e){document.getElementById('canvasGrid').innerHTML='<p style="color:var(--text3)">Canvas unavailable.</p>';}}
   async function addWidget(){const t=document.getElementById('wTitle').value.trim(),h=document.getElementById('wHtml').value.trim();if(!h){toast('Add some HTML');return;}await api('/api/ui',{op:'add',title:t||'widget',by:'you',html:h});document.getElementById('wTitle').value='';document.getElementById('wHtml').value='';toast('Widget added');loadCanvas();}
   async function delWidget(id){await api('/api/ui',{op:'delete',id});loadCanvas();}

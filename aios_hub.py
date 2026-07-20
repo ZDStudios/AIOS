@@ -442,10 +442,14 @@ def brain_system_prompt(message: str) -> str:
         "claude-code (Claude Code API), and LifeOS (shared skills). Be concise and helpful. Suggest "
         "which agent is best for a task.")
     sysp += ("\n\nGENERATIVE UI (OpenUI): when a visual answer helps (charts, tables, forms, dashboards, "
-             "buttons), emit a fenced ```ui block containing a full, self-contained HTML document "
+             "buttons, games), emit a fenced ```ui block containing a full, self-contained HTML document "
              "(inline CSS/JS, no external URLs). The hub renders it live and interactive inside the chat. "
              "Use the page's theme via CSS variables like var(--accent), var(--bg), var(--text). This is "
-             "OpenUI-style generative UI (https://www.openui.com).")
+             "OpenUI-style generative UI (https://www.openui.com).\n"
+             "If the user asks for it ON THE CANVAS or ON THE DASHBOARD, still just emit the ```ui block — "
+             "the hub pins it to the Canvas for you automatically. Don't try to curl the HTML anywhere, and "
+             "don't say you can't; building the block IS how it gets there. Make it self-contained and sized "
+             "to fit its container (use width:100%, and for a <canvas> set its size from JS on load).")
     if tools.full_control():
         sysp += TOOL_PROTOCOL
         sysp += (
@@ -478,6 +482,58 @@ def commands_this_turn() -> list[str]:
     return list(getattr(_TL, "ran", []))
 
 
+# --------------------------------------------------------------------------- #
+# Live activity — what the agent is thinking/doing, streamed to the chat while  #
+# the turn is still running. The chat POST is blocking, so progress goes to a   #
+# side channel the browser polls (GET /api/activity) instead of restructuring   #
+# the whole request path around SSE.                                            #
+# --------------------------------------------------------------------------- #
+_ACT: dict[str, dict] = {}
+_ACT_LOCK = threading.Lock()
+
+
+def act(kind: str, text: str, detail: str = ""):
+    """Record a step for whichever turn this thread is serving. No-op if untracked."""
+    turn = getattr(_TL, "turn", "")
+    if not turn:
+        return
+    with _ACT_LOCK:
+        rec = _ACT.setdefault(turn, {"events": [], "done": False, "ts": time.time()})
+        rec["events"].append({"kind": kind, "text": str(text)[:400],
+                              "detail": str(detail)[:1500], "t": time.time()})
+        rec["ts"] = time.time()
+        if len(rec["events"]) > 200:
+            rec["events"] = rec["events"][-200:]
+
+
+def act_begin(turn: str):
+    _TL.turn = turn or ""
+    if turn:
+        with _ACT_LOCK:
+            _ACT[turn] = {"events": [], "done": False, "ts": time.time()}
+            # drop anything older than 10 minutes so this can't grow forever
+            for k in [k for k, v in _ACT.items() if time.time() - v["ts"] > 600]:
+                _ACT.pop(k, None)
+
+
+def act_end():
+    turn = getattr(_TL, "turn", "")
+    if turn:
+        with _ACT_LOCK:
+            if turn in _ACT:
+                _ACT[turn]["done"] = True
+    _TL.turn = ""
+
+
+def activity(turn: str, since: int = 0) -> dict:
+    with _ACT_LOCK:
+        rec = _ACT.get(turn)
+        if not rec:
+            return {"events": [], "done": False, "n": since}
+        ev = rec["events"][since:]
+        return {"events": ev, "done": rec["done"], "n": since + len(ev)}
+
+
 def run_brain(message: str, history: list, max_rounds: int = 4) -> tuple[str, list[str]]:
     """The Brain with a body: think → RUN → read output → think again."""
     sysp = brain_system_prompt(message)
@@ -486,17 +542,26 @@ def run_brain(message: str, history: list, max_rounds: int = 4) -> tuple[str, li
     _TL.ran = ran
     out = ""
     for round_i in range(max_rounds):
+        act("thinking", "Thinking…" if round_i == 0 else f"Thinking (step {round_i + 1})…")
         out = llm_chat(msgs, system=sysp)
         cmds = _parse_runs(out)
         if not cmds or not tools.full_control():
+            prose = "\n".join(l for l in (out or "").splitlines()
+                              if not l.strip().upper().startswith("RUN:")).strip()
+            if prose:
+                act("note", prose[:300])
             return out, ran
         results = []
         for c in cmds[:3]:
+            act("run", c)
             r = tools.shell(c, actor="brain")
             ran.append(c)
             body = (r["out"] or "") + (f"\n[stderr]\n{r['err']}" if r["err"] else "")
             if r.get("blocked"):
                 body = r["err"]
+                act("blocked", c, body)
+            else:
+                act("result", f"exit {r['code']}", (body or "(no output)")[:900])
             results.append(f"$ {c}\n(exit {r['code']})\n{body[:3000] or '(no output)'}")
         last = round_i == max_rounds - 1
         nudge = ("\n\nThat was the last command you may run. Give the final answer now, "
@@ -505,6 +570,45 @@ def run_brain(message: str, history: list, max_rounds: int = 4) -> tuple[str, li
                  {"role": "user", "content": "Command results:\n\n" + "\n\n".join(results) + nudge}]
     out = llm_chat(msgs, system=sysp)  # force a prose answer after the last round
     return "\n".join(l for l in out.splitlines() if not l.strip().upper().startswith("RUN:")), ran
+
+
+# A ```ui block in a reply renders inline in chat. But when you asked for it "on
+# the canvas", inline isn't what you wanted — and making the model curl its own
+# HTML back to /api/ui means shell-quoting a whole document, which is fragile.
+# So the hub pins it for you: deterministic, no quoting, no extra model call.
+_UI_BLOCK = re.compile(r"```(?:ui|html|openui)\s*\n([\s\S]*?)```", re.I)
+_CANVAS_WORDS = re.compile(r"\b(canvas|dashboard|widget|pin(?:\s+it)?|add\s+.*\bto\s+the\s+"
+                           r"(?:canvas|dashboard))\b", re.I)
+
+
+def maybe_pin_to_canvas(user_msg: str, reply: str) -> str:
+    """If the user asked for it on the canvas and the reply built UI, pin it there."""
+    if not _CANVAS_WORDS.search(user_msg or ""):
+        return ""
+    m = _UI_BLOCK.search(reply or "")
+    if not m:
+        return ""
+    html = m.group(1).strip()
+    if len(html) < 40:
+        return ""
+    title = "widget"
+    for line in (reply or "").splitlines():          # a heading near the block names it
+        s = line.strip().lstrip("#").strip()
+        if s and not s.startswith("```") and 3 < len(s) < 60:
+            title = s.rstrip(":")
+            break
+    words = re.findall(r"[a-z]+", (user_msg or "").lower())
+    for w in words:                                   # prefer a noun the user actually used
+        if w in ("snake", "chart", "graph", "timer", "clock", "todo", "calculator",
+                 "game", "board", "table", "form", "counter", "notes", "kanban"):
+            title = w.capitalize()
+            break
+    items = _load_json(WIDGETS_FILE, [])
+    items.insert(0, {"id": str(int(time.time() * 1000)), "title": title[:80],
+                     "by": "brain", "html": html, "ts": time.time()})
+    _save_json(WIDGETS_FILE, items[:40])
+    brain.audit("brain", "canvas.pin", title)
+    return title
 
 
 def route(target: str, message: str, history: list | None = None) -> str:
@@ -518,8 +622,10 @@ def route(target: str, message: str, history: list | None = None) -> str:
             reply += "\n\n---\n🔧 Ran: " + ", ".join(f"`{c}`" for c in ran[:6])
         return reply
     if target == "crewai":
+        act("agent", "Handing off to CrewAI…")
         return ask_crewai(message)
     if target == "opencode":
+        act("agent", "Handing off to opencode…")
         return ask_opencode(message)
     if target in ("claudecode", "claude-code"):
         return ask_claudecode(message, history)
@@ -1045,7 +1151,9 @@ def run_team(message: str, history: list | None = None) -> str:
 
     results = []
     for agent, sub in calls[:3]:  # cap fan-out
+        act("delegate", f"{agent}: {sub[:120]}")
         results.append(f"[{agent}] {sub}\n{route(agent, sub)}")
+    act("thinking", "Synthesizing the team's answers…")
     synth_sys = ("You are The AI OS. Synthesize a single, clear answer to the user's request from the "
                  "agent results below. Don't mention the internal delegation unless useful.")
     joined = "\n\n".join(results)
@@ -1283,6 +1391,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"patterns": tools.fabric_patterns(), "bin": bool(tools.fabric_bin())})
         elif self.path == "/api/modes":
             self._send(200, {"state": modes_state(), "modes": tools.agent_modes_meta()})
+        elif self.path == "/api/activity":
+            self._send(200, activity(self._query.get("turn", [""])[0],
+                                     int(self._query.get("since", ["0"])[0] or 0)))
         elif self.path == "/api/dashboard":
             self._send(200, dashboard_cfg())
         elif self.path == "/api/updates":
@@ -1375,7 +1486,17 @@ class Handler(BaseHTTPRequestHandler):
                                    for m in history if m.get("role") == "user")[-4000:])
                 self._send(200, {"target": "fabric", "reply": reply, "ran": []})
                 return
-            reply = route(target, message, history)
+            act_begin(payload.get("turn", ""))
+            try:
+                reply = route(target, message, history)
+                pinned = maybe_pin_to_canvas(message, reply)
+                if pinned:
+                    reply += (f"\n\n📌 Pinned **{pinned}** to the Canvas — open the "
+                              f"**Canvas** tab to use it.")
+                    act("canvas", f"Pinned '{pinned}' to the Canvas")
+                act("done", "Done")
+            finally:
+                act_end()
             ran = commands_this_turn()
             remember_async(message, reply)      # Active Memory: learn from every turn
             learn_async(message, reply, ran)    # Curator: turn procedures into skills
